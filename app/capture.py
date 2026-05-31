@@ -215,17 +215,23 @@ async def capture_tweet(url: str) -> dict:
                     all_images.append(img_url)
 
     # Handle X Article (long-form content)
+    verification = None
     article = tweet.get("article", {})
     if article and not full_text.strip():
         # This is an X Article - extract content from blocks/entityMap
         article_content = extract_x_article(article)
         full_text = article_content["text"]
         all_images.extend(article_content["images"])
+        
+        # Verify capture completeness
+        blocks = article.get("content", {}).get("blocks", [])
+        entity_map = article.get("content", {}).get("entityMap", [])
+        verification = verify_article_capture(blocks, entity_map, full_text, all_images)
 
     title = generate_title(full_text, author_handle)
     summary = full_text[:300] if full_text else ""
 
-    return {
+    ret = {
         "title": title,
         "summary": summary,
         "full_text": full_text,
@@ -234,6 +240,74 @@ async def capture_tweet(url: str) -> dict:
         "images": all_images,
         "tags": extract_tags(full_text),
     }
+    if verification and not verification["ok"]:
+        ret["_verification"] = verification
+    return ret
+
+
+def verify_article_capture(blocks: list, entity_map: list, captured_text: str, captured_images: list) -> dict:
+    """Verify captured article content matches original Draft.js blocks.
+    
+    Returns dict with:
+      - ok: bool
+      - missing_blocks: list of text segments not found in captured_text
+      - missing_images: count of expected images not captured
+      - coverage: float (0-1) of text blocks found in captured content
+    """
+    # Extract all text segments from original blocks
+    original_segments = []
+    expected_images = 0
+    
+    for block in blocks:
+        btype = block.get("type", "")
+        text = block.get("text", "").strip()
+        er = block.get("entityRanges", [])
+        
+        # Count MEDIA entities
+        for r in er:
+            ek = int(r.get("key", -1))
+            if 0 <= ek < len(entity_map):
+                if entity_map[ek].get("value", {}).get("type") == "MEDIA":
+                    expected_images += 1
+        
+        # Collect text content (skip atomic blocks and empty text)
+        if btype != "atomic" and text and len(text) > 5:
+            # Strip leading emoji/symbols for comparison
+            clean = re.sub(r'^[🚨🛠💾🛑💡⚡🔧🎯📊🔍]+\s*', '', text)
+            if clean:
+                original_segments.append(clean)
+    
+    # Check each segment against captured text
+    captured_clean = re.sub(r'[#*`\[\]()>-]', '', captured_text)  # strip markdown
+    captured_clean = re.sub(r'\s+', ' ', captured_clean)
+    
+    missing = []
+    for seg in original_segments:
+        # Check if the first 20 chars of the segment appear in captured text
+        check = seg[:20].strip()
+        if check and check not in captured_clean:
+            missing.append(seg[:80])
+    
+    coverage = 1 - (len(missing) / max(len(original_segments), 1))
+    img_ok = len(captured_images) >= min(expected_images, 1)
+    
+    result = {
+        "ok": coverage >= 0.8 and img_ok,
+        "coverage": round(coverage, 2),
+        "total_segments": len(original_segments),
+        "missing_blocks": missing,
+        "expected_images": expected_images,
+        "captured_images": len(captured_images),
+    }
+    
+    if not result["ok"]:
+        import logging
+        logging.warning(f"Article capture verification FAILED: coverage={coverage:.0%}, "
+                       f"missing={len(missing)} segments, images={len(captured_images)}/{expected_images}")
+        for m in missing[:3]:
+            logging.warning(f"  Missing: {m}...")
+    
+    return result
 
 
 def extract_x_article(article: dict) -> dict:
