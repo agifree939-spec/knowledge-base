@@ -261,22 +261,21 @@ def extract_x_article(article: dict) -> dict:
     output_lines = []
     all_images = []
     img_count = 0
+    deferred_media_urls = []  # MEDIA from non-atomic blocks, inserted at end
 
     for block in blocks:
         btype = block.get("type", "")
         text = block.get("text", "").strip()
         er = block.get("entityRanges", [])
 
-        # Process all entity ranges in this block (handles MEDIA in non-atomic blocks)
+        # Check for MEDIA entities in this block
+        media_in_block = None
         if er:
             for r in er:
                 ek = int(r["key"])
                 if ek in media_url_by_entitymap_idx:
-                    img_count += 1
-                    img_url = media_url_by_entitymap_idx[ek]
-                    all_images.append(img_url)
-                    output_lines.append(f"![图片{img_count}]({img_url})")
-                    break  # one MEDIA per block max
+                    media_in_block = media_url_by_entitymap_idx[ek]
+                    break
 
         if btype == "atomic" and er:
             ek = int(er[0]["key"])
@@ -284,7 +283,18 @@ def extract_x_article(article: dict) -> dict:
                 output_lines.append("")
                 output_lines.append(md_by_index[ek])
                 output_lines.append("")
+            elif media_in_block:
+                # Atomic MEDIA block — insert image inline here
+                img_count += 1
+                all_images.append(media_in_block)
+                output_lines.append("")
+                output_lines.append(f"![图片{img_count}]({media_in_block})")
+                output_lines.append("")
             continue
+
+        # Non-atomic block with MEDIA — defer to end of article
+        if media_in_block and media_in_block not in deferred_media_urls:
+            deferred_media_urls.append(media_in_block)
 
         if text:
             if btype == "header-two":
@@ -299,6 +309,13 @@ def extract_x_article(article: dict) -> dict:
                 output_lines.append(f"- {text}")
             else:
                 output_lines.append(text)
+
+    # Insert deferred MEDIA images at end (before cover)
+    for img_url in deferred_media_urls:
+        img_count += 1
+        all_images.append(img_url)
+        output_lines.append("")
+        output_lines.append(f"![图片{img_count}]({img_url})")
 
     # Also add cover image if present
     cover_url = article.get("cover_media", {}).get("media_info", {}).get("original_img_url", "")
