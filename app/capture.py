@@ -29,6 +29,71 @@ def normalize_url(url: str) -> str:
     return url
 
 
+# Emoji pattern (covers all emoji ranges)
+EMOJI_RE = re.compile(
+    "["
+    "\U0001F100-\U0001F1FF"  # Enclosed Alphanumeric Supplement
+    "\U0001F200-\U0001F2FF"  # Enclosed Ideographic Supplement
+    "\U0001F300-\U0001F5FF"  # Miscellaneous Symbols and Pictographs
+    "\U0001F600-\U0001F64F"  # Emoticons
+    "\U0001F680-\U0001F6FF"  # Transport and Map
+    "\U0001F700-\U0001F77F"  # Alchemical Symbols
+    "\U0001F780-\U0001F7FF"  # Geometric Shapes Extended
+    "\U0001F800-\U0001F8FF"  # Supplemental Arrows-C
+    "\U0001F900-\U0001F9FF"  # Supplemental Symbols and Pictographs
+    "\U0001FA00-\U0001FA6F"  # Chess Symbols
+    "\U0001FA70-\U0001FAFF"  # Symbols Extended-A
+    "\U00002702-\U000027B0"  # Dingbats
+    "\U0000FE00-\U0000FE0F"  # Variation Selectors
+    "\U0000200D"             # Zero Width Joiner
+    "\U00002600-\U000026FF"  # Miscellaneous Symbols
+    "\U00002B50-\U00002B55"  # Additional symbols
+    "]+",
+    flags=re.UNICODE,
+)
+
+
+def generate_title(text: str, author: str = "") -> str:
+    """Generate a concise one-sentence title from text. No author prefix."""
+    if not text:
+        return f"@{author} 的推文" if author else "Untitled"
+
+    # Clean up: remove emojis, URLs, quoted tweet markers, excess whitespace
+    clean = EMOJI_RE.sub("", text)
+    clean = re.sub(r"https?://\S+", "", clean)
+    clean = re.sub(r"\n--- Quoted @\w+ ---.*", "", clean, flags=re.DOTALL)
+    clean = re.sub(r"\s+", " ", clean).strip()
+
+    # Remove leading @mentions (common in retweets/quotes)
+    clean = re.sub(r"^@\w+\s*", "", clean).strip()
+
+    if not clean:
+        return f"@{author} 的推文" if author else "Untitled"
+
+    # Take first sentence (up to 60 chars for a punchy title)
+    # Try to break at sentence-ending punctuation first
+    m = re.match(r"^(.{10,60}[。！？!?\.])", clean)
+    if m:
+        return m.group(1).strip()
+
+    # Try to break at natural pauses (，、；:)
+    m = re.match(r"^(.{10,60}[，、；：,:])", clean)
+    if m:
+        return m.group(1).strip()
+
+    # Fallback: truncate at 60 chars, try to break at word boundary
+    if len(clean) > 60:
+        # For Chinese text, just cut at 60
+        truncated = clean[:60]
+        # Try to break at last space for mixed content
+        last_space = truncated.rfind(" ")
+        if last_space > 30:
+            truncated = truncated[:last_space]
+        return truncated.rstrip("，、；：, ") + "…"
+
+    return clean
+
+
 def detect_url_type(url: str) -> str:
     """Detect if URL is a tweet, article, or unknown."""
     for pattern in TWITTER_PATTERNS:
@@ -145,7 +210,7 @@ async def capture_tweet(url: str) -> dict:
         full_text = article_content["text"]
         all_images.extend(article_content["images"])
 
-    title = f"@{author_handle}: {full_text[:80]}..." if full_text else f"Tweet by @{author_handle}"
+    title = generate_title(full_text, author_handle)
     summary = full_text[:300] if full_text else ""
 
     return {
