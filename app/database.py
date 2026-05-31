@@ -101,6 +101,25 @@ def insert_entry(
     return entry_id
 
 
+def update_entry(entry_id: int, **kwargs) -> bool:
+    """Update one or more fields of an entry. Returns True if updated."""
+    allowed = {"title", "summary", "tags", "full_text", "content_type", "status", "error_message"}
+    fields = {k: v for k, v in kwargs.items() if k in allowed and v is not None}
+    if not fields:
+        return False
+    # Serialize tags if present
+    if "tags" in fields and isinstance(fields["tags"], list):
+        fields["tags"] = json.dumps(fields["tags"], ensure_ascii=False)
+    set_clause = ", ".join(f"{k}=?" for k in fields)
+    values = list(fields.values()) + [entry_id]
+    conn = get_db()
+    cursor = conn.execute(f"UPDATE entries SET {set_clause} WHERE id=?", values)
+    updated = cursor.rowcount > 0
+    conn.commit()
+    conn.close()
+    return updated
+
+
 def insert_image(entry_id: int, filename: str, local_path: str, original_url: str = ""):
     conn = get_db()
     conn.execute(

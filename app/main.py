@@ -10,7 +10,7 @@ from contextlib import asynccontextmanager
 from app.config import IMAGES_DIR, HOST, PORT
 from app.database import (
     init_db, get_entry, search_entries, list_entries,
-    delete_entry, get_stats,
+    delete_entry, get_stats, update_entry,
 )
 from app.capture import process_capture
 
@@ -119,7 +119,7 @@ async def index(request: Request):
 
 @app.post("/api/capture")
 async def api_capture(request: Request):
-    """Capture a URL - main entry point."""
+    """Capture a URL - main entry point. Optional 'title' overrides auto-generated title."""
     try:
         body = await request.json()
     except Exception:
@@ -129,8 +129,23 @@ async def api_capture(request: Request):
     if not url:
         raise HTTPException(400, "Missing 'url' field")
 
-    result = await process_capture(url)
+    custom_title = body.get("title", "").strip() or None
+    result = await process_capture(url, title_override=custom_title)
     return JSONResponse(result)
+
+
+@app.patch("/api/entries/{entry_id}")
+async def api_update_entry(entry_id: int, request: Request):
+    """Update entry fields (title, summary, tags, etc.)."""
+    try:
+        body = await request.json()
+    except Exception:
+        raise HTTPException(400, "Invalid JSON body")
+
+    updated = update_entry(entry_id, **body)
+    if not updated:
+        raise HTTPException(404, "Entry not found or no valid fields")
+    return {"status": "updated", "entry_id": entry_id}
 
 
 @app.get("/api/search")

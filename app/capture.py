@@ -337,8 +337,8 @@ def extract_tags(text: str) -> list:
     return sorted(tags)[:10]
 
 
-async def process_capture(url: str) -> dict:
-    """Main entry point: detect type, capture, store."""
+async def process_capture(url: str, title_override: str | None = None) -> dict:
+    """Main entry point: detect type, capture, store. title_override replaces auto-generated title."""
     existing = get_entry_by_url(url)
     if existing:
         return {"status": "exists", "entry_id": existing["id"], "title": existing["title"]}
@@ -349,6 +349,10 @@ async def process_capture(url: str) -> dict:
         result = await capture_tweet(url)
     else:
         result = await capture_article(url)
+
+    # Override title if provided
+    if title_override:
+        result["title"] = title_override
 
     if "error" in result:
         entry_id = insert_entry(
