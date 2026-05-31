@@ -267,18 +267,22 @@ def extract_x_article(article: dict) -> dict:
         text = block.get("text", "").strip()
         er = block.get("entityRanges", [])
 
+        # Process all entity ranges in this block (handles MEDIA in non-atomic blocks)
+        if er:
+            for r in er:
+                ek = int(r["key"])
+                if ek in media_url_by_entitymap_idx:
+                    img_count += 1
+                    img_url = media_url_by_entitymap_idx[ek]
+                    all_images.append(img_url)
+                    output_lines.append(f"![图片{img_count}]({img_url})")
+                    break  # one MEDIA per block max
+
         if btype == "atomic" and er:
             ek = int(er[0]["key"])
             if ek in md_by_index:
                 output_lines.append("")
                 output_lines.append(md_by_index[ek])
-                output_lines.append("")
-            elif ek in media_url_by_entitymap_idx:
-                img_count += 1
-                img_url = media_url_by_entitymap_idx[ek]
-                all_images.append(img_url)
-                output_lines.append("")
-                output_lines.append(f"![图片{img_count}]({img_url})")
                 output_lines.append("")
             continue
 
@@ -295,6 +299,11 @@ def extract_x_article(article: dict) -> dict:
                 output_lines.append(f"- {text}")
             else:
                 output_lines.append(text)
+
+    # Also add cover image if present
+    cover_url = article.get("cover_media", {}).get("media_info", {}).get("original_img_url", "")
+    if cover_url and cover_url not in all_images:
+        all_images.insert(0, cover_url)
 
     return {
         "text": "\n".join(output_lines),
