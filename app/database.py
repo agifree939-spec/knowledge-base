@@ -181,14 +181,20 @@ def list_entries(
     offset: int = 0,
 ) -> list:
     conn = get_db()
+    base = """
+        SELECT e.*,
+               (SELECT i.local_path FROM images i WHERE i.entry_id = e.id LIMIT 1) AS first_image
+        FROM entries e
+        WHERE e.status = 'done'
+    """
     if content_type:
         rows = conn.execute(
-            "SELECT * FROM entries WHERE content_type = ? AND status = 'done' ORDER BY captured_at DESC LIMIT ? OFFSET ?",
+            base + " AND e.content_type = ? ORDER BY e.captured_at DESC LIMIT ? OFFSET ?",
             (content_type, limit, offset),
         ).fetchall()
     else:
         rows = conn.execute(
-            "SELECT * FROM entries WHERE status = 'done' ORDER BY captured_at DESC LIMIT ? OFFSET ?",
+            base + " ORDER BY e.captured_at DESC LIMIT ? OFFSET ?",
             (limit, offset),
         ).fetchall()
     results = []

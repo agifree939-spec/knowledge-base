@@ -217,6 +217,14 @@
         }
         .entry-icon.tweet { background: #1da1f220; color: var(--twitter); }
         .entry-icon.article { background: #8b5cf620; color: var(--article); }
+        .entry-thumb {
+            width: 72px;
+            height: 72px;
+            object-fit: cover;
+            border-radius: 8px;
+            flex-shrink: 0;
+            margin-top: 2px;
+        }
         .entry-body { flex: 1; min-width: 0; }
         .entry-title {
             font-size: 0.95rem;
@@ -375,10 +383,12 @@ function renderEntry(e) {
     const author = e.author || e.source_author || '';
     const tags = (e.tags || []).slice(0, 3).map(t => `<span class="tag">#${escapeHtml(t)}</span>`).join('');
     const date = e.captured_at ? e.captured_at.substring(0, 10) : '';
+    const thumb = e.first_image ? `<img class="entry-thumb" src="/${e.first_image}" alt="" loading="lazy">` : '';
 
     return `
         <div class="entry" data-id="${e.id}">
             <div class="entry-icon ${iconClass}">${icon}</div>
+            ${thumb}
             <div class="entry-body">
                 <div class="entry-title">${title}</div>
                 <div class="entry-meta">
