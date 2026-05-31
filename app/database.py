@@ -201,11 +201,33 @@ def list_entries(
 
 
 def delete_entry(entry_id: int) -> bool:
+    """Delete entry and all associated image files."""
     conn = get_db()
+    # 1. Get image file paths before deleting DB records
+    rows = conn.execute(
+        "SELECT local_path FROM images WHERE entry_id = ?", (entry_id,)
+    ).fetchall()
+    # 2. Delete entry (CASCADE deletes image records)
     cursor = conn.execute("DELETE FROM entries WHERE id = ?", (entry_id,))
     deleted = cursor.rowcount > 0
     conn.commit()
     conn.close()
+    # 3. Delete image files and directory from disk
+    if deleted and rows:
+        from app.config import IMAGES_DIR
+        entry_dir = IMAGES_DIR / str(entry_id)
+        for row in rows:
+            fpath = Path(row["local_path"]) if not Path(row["local_path"]).is_absolute() else Path(row["local_path"])
+            # Try both relative-to-IMAGES_DIR and absolute
+            full_path = IMAGES_DIR.parent / fpath if not fpath.is_absolute() else fpath
+            if full_path.exists():
+                full_path.unlink(missing_ok=True)
+        # Remove the entry directory if empty
+        if entry_dir.exists():
+            try:
+                entry_dir.rmdir()
+            except OSError:
+                pass  # directory not empty, leave it
     return deleted
 
 
