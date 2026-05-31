@@ -363,6 +363,10 @@ function escapeHtml(s) {
     return d.innerHTML;
 }
 
+function escapeAttr(s) {
+    return s.replace(/&/g,'&amp;').replace(/'/g,'&#39;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
 function renderEntry(e) {
     const icon = ICONS[e.content_type] || '📌';
     const iconClass = e.content_type || 'tweet';
@@ -385,7 +389,7 @@ function renderEntry(e) {
                 ${summary}
             </div>
             <div class="entry-actions">
-                <button class="btn-delete" onclick="event.stopPropagation(); deleteEntry(${e.id}, '${escapeHtml(e.title || 'Untitled')}')" title="删除">🗑</button>
+                <button class="btn-delete" onclick="event.stopPropagation(); deleteEntry(${e.id}, '${escapeAttr(e.title || 'Untitled')}')" title="删除">🗑</button>
             </div>
         </div>`;
 }
