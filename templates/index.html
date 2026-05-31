@@ -97,6 +97,21 @@
         }
         .capture input:focus { border-color: var(--accent); }
         .capture input::placeholder { color: #444; }
+        .capture-title-input {
+            width: 100%;
+            margin-top: 8px;
+            padding: 0.55rem 0.9rem;
+            background: #1a1a2e;
+            border: 1px solid #333;
+            border-radius: 8px;
+            color: #e0e0e0;
+            font-size: 0.85rem;
+            outline: none;
+            transition: border-color 0.2s;
+            box-sizing: border-box;
+        }
+        .capture-title-input:focus { border-color: var(--accent); }
+        .capture-title-input::placeholder { color: #555; }
         .capture button {
             padding: 0.7rem 1.5rem;
             background: var(--green);
@@ -334,6 +349,7 @@
             <input id="capture-url" placeholder="粘贴推文或文章链接..." onkeydown="if(event.key==='Enter') doCapture()" />
             <button id="capture-btn" onclick="doCapture()">📥 收录</button>
         </div>
+        <input id="capture-title" class="capture-title-input" placeholder="一句话概述（选填，留空自动生成）" onkeydown="if(event.key==='Enter') doCapture()" />
         <div class="msg" id="capture-msg"></div>
     </div>
 
@@ -473,6 +489,7 @@ async function deleteEntry(id, title) {
 
 async function doCapture() {
     const url = document.getElementById('capture-url').value.trim();
+    const title = document.getElementById('capture-title').value.trim();
     const msg = document.getElementById('capture-msg');
     const btn = document.getElementById('capture-btn');
     if (!url) return;
@@ -482,10 +499,12 @@ async function doCapture() {
     msg.className = 'msg'; msg.textContent = ''; msg.style.display = 'none';
 
     try {
+        const body = {url};
+        if (title) body.title = title;
         const r = await fetch('/api/capture', {
             method: 'POST',
             headers: {'Content-Type':'application/json'},
-            body: JSON.stringify({url})
+            body: JSON.stringify(body)
         });
         const d = await r.json();
         if (r.ok) {
@@ -497,6 +516,7 @@ async function doCapture() {
                 msg.textContent = `✅ 已收录: ${d.title || url}`;
             }
             document.getElementById('capture-url').value = '';
+            document.getElementById('capture-title').value = '';
             loadStats();
             loadEntries();
         } else {
