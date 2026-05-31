@@ -12,12 +12,6 @@ services:
       - KB_DB_PATH=/data/knowledge.db
       - KB_HOST=0.0.0.0
       - KB_PORT=8501
-    labels:
-      - "traefik.enable=true"
-      - "traefik.http.routers.kb.rule=Host(`kb.zencore.ccwu.cc`)"
-      - "traefik.http.routers.kb.entrypoints=websecure"
-      - "traefik.http.routers.kb.tls.certresolver=letsencrypt"
-      - "traefik.http.services.kb.loadbalancer.server.port=8501"
 
 volumes:
   kb-data:
