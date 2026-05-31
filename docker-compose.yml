@@ -2,19 +2,12 @@ version: "3.8"
 
 services:
   knowledge-base:
-    image: python:3.13-slim
-    container_name: kb-service
+    build: .
     restart: unless-stopped
-    entrypoint: ["/bin/bash", "/start.sh"]
+    working_dir: /app
     volumes:
       - kb-data:/data
-      - /opt/data/projects/knowledge-base/app:/app/app:ro
-      - /opt/data/projects/knowledge-base/templates:/app/templates:ro
-      - /opt/data/projects/knowledge-base/start.sh:/start.sh:ro
-    working_dir: /app
     environment:
-      - TWITTER_AUTH_TOKEN=${TWITTER_AUTH_TOKEN}
-      - TWITTER_CT0=${TWITTER_CT0}
       - KB_DATA_DIR=/data
       - KB_DB_PATH=/data/knowledge.db
       - KB_HOST=0.0.0.0
@@ -25,13 +18,7 @@ services:
       - "traefik.http.routers.kb.entrypoints=websecure"
       - "traefik.http.routers.kb.tls.certresolver=letsencrypt"
       - "traefik.http.services.kb.loadbalancer.server.port=8501"
-    networks:
-      - dokploy-network
 
 volumes:
   kb-data:
     driver: local
-
-networks:
-  dokploy-network:
-    external: true
