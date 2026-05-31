@@ -181,7 +181,7 @@
     {% if entry.images and entry.images|length > 0 %}
     <div class="images-section">
         {% for img in entry.images %}
-        <img src="/images/{{ entry.id }}/{{ img.filename }}" alt="image {{ loop.index }}">
+        <img src="/{{ img.local_path }}" alt="image {{ loop.index }}">
         {% endfor %}
     </div>
     {% endif %}
