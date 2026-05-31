@@ -37,6 +37,12 @@ TEMPLATES_DIR = Path(__file__).parent.parent / "templates"
 templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
 
 
+@app.get("/", response_class=HTMLResponse)
+async def index(request: Request):
+    """Landing page with search and capture."""
+    return templates.TemplateResponse("index.html", {"request": request})
+
+
 @app.post("/api/capture")
 async def api_capture(request: Request):
     """Capture a URL - main entry point."""
