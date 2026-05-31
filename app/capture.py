@@ -240,7 +240,7 @@ async def capture_tweet(url: str) -> dict:
         "images": all_images,
         "tags": extract_tags(full_text),
     }
-    if verification and not verification["ok"]:
+    if verification:
         ret["_verification"] = verification
     return ret
 
