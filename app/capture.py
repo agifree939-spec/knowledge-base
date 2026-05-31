@@ -3,7 +3,7 @@ import re
 import hashlib
 from pathlib import Path
 from datetime import datetime
-from urllib.parse import urlparse
+from urllib.parse import urlparse, urlencode, parse_qs, urlunparse
 import httpx
 import trafilatura
 from bs4 import BeautifulSoup
@@ -17,6 +17,16 @@ from app.database import (
 TWITTER_PATTERNS = [
     re.compile(r"(?:twitter\.com|x\.com)/\w+/status/(\d+)"),
 ]
+
+
+def normalize_url(url: str) -> str:
+    """Normalize URL: strip tracking params for dedup."""
+    parsed = urlparse(url)
+    # For Twitter/X URLs, strip all query params (s=52, t=xx, etc.)
+    if any(p.search(url) for p in TWITTER_PATTERNS):
+        clean = parsed._replace(query="", fragment="")
+        return urlunparse(clean)
+    return url
 
 
 def detect_url_type(url: str) -> str:
@@ -339,6 +349,8 @@ def extract_tags(text: str) -> list:
 
 async def process_capture(url: str, title_override: str | None = None) -> dict:
     """Main entry point: detect type, capture, store. title_override replaces auto-generated title."""
+    # Normalize URL to strip tracking params (e.g. ?s=52)
+    url = normalize_url(url)
     existing = get_entry_by_url(url)
     if existing:
         return {"status": "exists", "entry_id": existing["id"], "title": existing["title"]}

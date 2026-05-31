@@ -485,8 +485,13 @@ async function doCapture() {
         });
         const d = await r.json();
         if (r.ok) {
-            msg.className = 'msg ok';
-            msg.textContent = `✅ 已收录: ${d.title || url}`;
+            if (d.status === 'exists') {
+                msg.className = 'msg ok';
+                msg.textContent = `ℹ️ 已存在: ${d.title || url}`;
+            } else {
+                msg.className = 'msg ok';
+                msg.textContent = `✅ 已收录: ${d.title || url}`;
+            }
             document.getElementById('capture-url').value = '';
             loadStats();
             loadEntries();
