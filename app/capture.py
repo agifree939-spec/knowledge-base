@@ -127,6 +127,14 @@ async def capture_tweet(url: str) -> dict:
                 if img_url:
                     all_images.append(img_url)
 
+    # Handle X Article (long-form content)
+    article = tweet.get("article", {})
+    if article and not full_text.strip():
+        # This is an X Article - extract content from blocks/entityMap
+        article_content = extract_x_article(article)
+        full_text = article_content["text"]
+        all_images.extend(article_content["images"])
+
     title = f"@{author_handle}: {full_text[:80]}..." if full_text else f"Tweet by @{author_handle}"
     summary = full_text[:300] if full_text else ""
 
@@ -138,6 +146,72 @@ async def capture_tweet(url: str) -> dict:
         "date": date,
         "images": all_images,
         "tags": extract_tags(full_text),
+    }
+
+
+def extract_x_article(article: dict) -> dict:
+    """Extract content from X Article (Draft.js format)."""
+    blocks = article.get("content", {}).get("blocks", [])
+    entity_map = article.get("content", {}).get("entityMap", [])
+    media_entities = article.get("media_entities", [])
+
+    # Extract code blocks from entityMap
+    md_by_index = {}
+    for idx, e in enumerate(entity_map):
+        if e.get("value", {}).get("type") == "MARKDOWN":
+            md_by_index[idx] = e["value"]["data"]["markdown"]
+
+    # Map image URLs from media_entities
+    media_entity_order = [(i, e) for i, e in enumerate(entity_map) if e.get("value", {}).get("type") == "MEDIA"]
+    media_url_by_entitymap_idx = {}
+    for seq_idx, (emap_idx, _) in enumerate(media_entity_order):
+        if seq_idx < len(media_entities):
+            url = media_entities[seq_idx].get("media_info", {}).get("original_img_url", "")
+            if url:
+                media_url_by_entitymap_idx[emap_idx] = url
+
+    # Build content
+    output_lines = []
+    all_images = []
+    img_count = 0
+
+    for block in blocks:
+        btype = block.get("type", "")
+        text = block.get("text", "").strip()
+        er = block.get("entityRanges", [])
+
+        if btype == "atomic" and er:
+            ek = int(er[0]["key"])
+            if ek in md_by_index:
+                output_lines.append("")
+                output_lines.append(md_by_index[ek])
+                output_lines.append("")
+            elif ek in media_url_by_entitymap_idx:
+                img_count += 1
+                img_url = media_url_by_entitymap_idx[ek]
+                all_images.append(img_url)
+                output_lines.append("")
+                output_lines.append(f"![图片{img_count}]({img_url})")
+                output_lines.append("")
+            continue
+
+        if text:
+            if btype == "header-two":
+                output_lines.append(f"\n## {text}")
+            elif btype == "header-three":
+                output_lines.append(f"\n### {text}")
+            elif btype == "blockquote":
+                output_lines.append(f"> {text}")
+            elif btype == "ordered-list-item":
+                output_lines.append(f"1. {text}")
+            elif btype == "unordered-list-item":
+                output_lines.append(f"- {text}")
+            else:
+                output_lines.append(text)
+
+    return {
+        "text": "\n".join(output_lines),
+        "images": all_images,
     }
 
 
