@@ -153,6 +153,24 @@
                     <hr class="thread-divider">
                 {% elif paragraph.strip().startswith('http') and (paragraph.strip().endswith('.jpg') or paragraph.strip().endswith('.jpeg') or paragraph.strip().endswith('.png') or paragraph.strip().endswith('.gif') or paragraph.strip().endswith('.webp')) %}
                     <img src="{{ paragraph.strip() }}" alt="image">
+                {% elif paragraph.strip().startswith('![') and '](' in paragraph.strip() and paragraph.strip().endswith(')') %}
+                    {# Markdown image: ![alt](url) #}
+                    {% set parts = paragraph.strip()[2:-1].split('](', 1) %}
+                    {% if parts|length == 2 %}
+                        <img src="{{ parts[1] }}" alt="{{ parts[0] }}">
+                    {% else %}
+                        <p>{{ paragraph }}</p>
+                    {% endif %}
+                {% elif paragraph.strip().startswith('# ') %}
+                    <h2>{{ paragraph.strip()[2:] }}</h2>
+                {% elif paragraph.strip().startswith('## ') %}
+                    <h3>{{ paragraph.strip()[3:] }}</h3>
+                {% elif paragraph.strip().startswith('### ') %}
+                    <h4>{{ paragraph.strip()[4:] }}</h4>
+                {% elif paragraph.strip().startswith('```') %}
+                    {# Skip code fence markers #}
+                {% elif paragraph.strip().startswith('> ') %}
+                    <blockquote>{{ paragraph.strip()[2:] }}</blockquote>
                 {% else %}
                     <p>{{ paragraph }}</p>
                 {% endif %}
