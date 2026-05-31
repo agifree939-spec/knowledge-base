@@ -551,6 +551,22 @@ async def process_capture(url: str, title_override: str | None = None) -> dict:
         )
         return {"status": "error", "error": result["error"], "entry_id": entry_id}
 
+    # Verify web article completeness (simple word count check)
+    verification = result.get("_verification")
+    if url_type == "article" and not verification:
+        ft = result.get("full_text", "")
+        # Web articles: check we got meaningful content (not just title/empty)
+        word_count = len(ft.split())
+        verification = {
+            "ok": word_count >= 50,
+            "coverage": 1.0 if word_count >= 50 else round(word_count / 50, 2),
+            "total_segments": 0,
+            "missing_blocks": [],
+            "expected_images": 0,
+            "captured_images": len(result.get("images", [])),
+            "word_count": word_count,
+        }
+
     entry_id = insert_entry(
         url=url,
         content_type=url_type,
@@ -561,6 +577,7 @@ async def process_capture(url: str, title_override: str | None = None) -> dict:
         source_author=result.get("author", ""),
         source_date=result.get("date", ""),
         status="done",
+        verification=verification,
     )
 
     downloaded = 0

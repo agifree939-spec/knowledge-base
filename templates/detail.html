@@ -40,6 +40,16 @@
             margin-bottom: 12px;
             color: #111;
         }
+        .verification-info {
+            margin-bottom: 12px;
+            font-size: 13px;
+        }
+        .verify-ok {
+            color: #22c55e;
+        }
+        .verify-warn {
+            color: #f59e0b;
+        }
         .tags {
             margin-bottom: 20px;
             display: flex;
@@ -169,6 +179,16 @@
     </div>
 
     <h1>{{ entry.title }}</h1>
+
+    {% if entry.verification %}
+    <div class="verification-info">
+        {% if entry.verification.ok %}
+        <span class="verify-ok">✅ 内容完整性验证通过</span>
+        {% else %}
+        <span class="verify-warn">⚠️ 内容可能不完整 (覆盖率 {{ (entry.verification.coverage * 100)|round }}%)</span>
+        {% endif %}
+    </div>
+    {% endif %}
 
     {% if entry.tags and entry.tags|length > 0 %}
     <div class="tags">

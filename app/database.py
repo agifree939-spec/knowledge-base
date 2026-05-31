@@ -30,7 +30,8 @@ def init_db():
             source_date TEXT DEFAULT '',
             captured_at TEXT NOT NULL,
             status      TEXT DEFAULT 'done',
-            error_message TEXT DEFAULT ''
+            error_message TEXT DEFAULT '',
+            verification TEXT DEFAULT ''
         );
 
         CREATE VIRTUAL TABLE IF NOT EXISTS entries_fts USING fts5(
@@ -70,6 +71,22 @@ def init_db():
     conn.commit()
     conn.close()
 
+    # Migration: add verification column if missing
+    _migrate_add_verification()
+
+
+def _migrate_add_verification():
+    """Add verification column to existing entries table if missing."""
+    try:
+        conn = get_db()
+        cols = [r[1] for r in conn.execute("PRAGMA table_info(entries)").fetchall()]
+        if "verification" not in cols:
+            conn.execute("ALTER TABLE entries ADD COLUMN verification TEXT DEFAULT ''")
+            conn.commit()
+        conn.close()
+    except Exception:
+        pass
+
 
 def insert_entry(
     url: str,
@@ -82,17 +99,19 @@ def insert_entry(
     source_date: str = "",
     status: str = "done",
     error_message: str = "",
+    verification: dict | None = None,
 ) -> int:
     conn = get_db()
+    verification_json = json.dumps(verification, ensure_ascii=False) if verification else ""
     cursor = conn.execute(
         """INSERT OR IGNORE INTO entries
            (url, content_type, title, summary, tags, full_text,
-            source_author, source_date, captured_at, status, error_message)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            source_author, source_date, captured_at, status, error_message, verification)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
         (
             url, content_type, title, summary, json.dumps(tags, ensure_ascii=False),
             full_text, source_author, source_date,
-            datetime.utcnow().isoformat(), status, error_message,
+            datetime.utcnow().isoformat(), status, error_message, verification_json,
         ),
     )
     entry_id = cursor.lastrowid
@@ -138,6 +157,8 @@ def get_entry(entry_id: int) -> Optional[dict]:
         return None
     entry = dict(row)
     entry["tags"] = json.loads(entry.get("tags", "[]"))
+    v = entry.get("verification", "")
+    entry["verification"] = json.loads(v) if v else None
     images = conn.execute(
         "SELECT * FROM images WHERE entry_id = ?", (entry_id,)
     ).fetchall()
@@ -201,6 +222,8 @@ def list_entries(
     for row in rows:
         entry = dict(row)
         entry["tags"] = json.loads(entry.get("tags", "[]"))
+        v = entry.get("verification", "")
+        entry["verification"] = json.loads(v) if v else None
         results.append(entry)
     conn.close()
     return results

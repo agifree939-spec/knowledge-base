@@ -236,6 +236,11 @@
             -webkit-box-orient: vertical;
             overflow: hidden;
         }
+        .verify-ok, .verify-warn {
+            font-size: 0.75rem;
+            vertical-align: middle;
+            margin-left: 0.3rem;
+        }
         .entry-meta {
             display: flex;
             align-items: center;
@@ -384,13 +389,25 @@ function renderEntry(e) {
     const tags = (e.tags || []).slice(0, 3).map(t => `<span class="tag">#${escapeHtml(t)}</span>`).join('');
     const date = e.captured_at ? e.captured_at.substring(0, 10) : '';
     const thumb = e.first_image ? `<img class="entry-thumb" src="/${e.first_image}" alt="" loading="lazy">` : '';
+    
+    // Verification badge
+    let verifyBadge = '';
+    const v = e.verification;
+    if (v) {
+        if (v.ok) {
+            verifyBadge = '<span class="verify-ok" title="内容完整性验证通过">✅</span>';
+        } else {
+            const pct = v.coverage ? Math.round(v.coverage * 100) : 0;
+            verifyBadge = `<span class="verify-warn" title="内容可能不完整 (${pct}% 覆盖率)">⚠️</span>`;
+        }
+    }
 
     return `
         <div class="entry" data-id="${e.id}">
             <div class="entry-icon ${iconClass}">${icon}</div>
             ${thumb}
             <div class="entry-body">
-                <div class="entry-title">${title}</div>
+                <div class="entry-title">${title} ${verifyBadge}</div>
                 <div class="entry-meta">
                     ${author ? `<span>${escapeHtml(author)}</span>` : ''}
                     ${tags}
