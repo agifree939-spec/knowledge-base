@@ -58,10 +58,22 @@ def generate_title(text: str, author: str = "") -> str:
     if not text:
         return f"@{author} 的推文" if author else "Untitled"
 
-    # Clean up: remove emojis, URLs, quoted tweet markers, excess whitespace
+    # Clean up: remove emojis, URLs, quoted tweet markers, markdown formatting
     clean = EMOJI_RE.sub("", text)
     clean = re.sub(r"https?://\S+", "", clean)
     clean = re.sub(r"\n--- Quoted @\w+ ---.*", "", clean, flags=re.DOTALL)
+    # Remove markdown quote blocks (> entire line content)
+    clean = re.sub(r"^>.*$", "", clean, flags=re.MULTILINE)
+    # Remove markdown headings (# ## ###)
+    clean = re.sub(r"^#{1,6}\s*", "", clean, flags=re.MULTILINE)
+    # Remove markdown bold/italic
+    clean = re.sub(r"\*{1,3}(.+?)\*{1,3}", r"\1", clean)
+    # Remove markdown code blocks
+    clean = re.sub(r"```[\s\S]*?```", "", clean)
+    clean = re.sub(r"`([^`]+)`", r"\1", clean)
+    # Remove markdown links [text](url) → text
+    clean = re.sub(r"\[([^\]]+)\]\([^)]+\)", r"\1", clean)
+    # Collapse whitespace
     clean = re.sub(r"\s+", " ", clean).strip()
 
     # Remove leading @mentions (common in retweets/quotes)
