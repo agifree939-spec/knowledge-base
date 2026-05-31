@@ -95,9 +95,14 @@ def markdown_to_html(text: str) -> str:
             html_parts.append(f'<blockquote>{stripped[2:]}</blockquote>')
             continue
         
-        # Regular paragraph
+        # Regular paragraph — escape HTML then linkify URLs
         escaped = stripped.replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
-        html_parts.append(f'<p>{escaped}</p>')
+        linked = re.sub(
+            r'(https?://[^\s<>&"]+)',
+            r'<a href="\1" target="_blank" rel="noopener">\1</a>',
+            escaped
+        )
+        html_parts.append(f'<p>{linked}</p>')
     
     # Close any unclosed code block
     if in_code_block and code_lines:
