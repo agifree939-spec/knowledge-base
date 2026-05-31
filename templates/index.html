@@ -377,7 +377,7 @@ function renderEntry(e) {
     const date = e.captured_at ? e.captured_at.substring(0, 10) : '';
 
     return `
-        <div class="entry" onclick="location.href='/detail/${e.id}'">
+        <div class="entry" data-id="${e.id}">
             <div class="entry-icon ${iconClass}">${icon}</div>
             <div class="entry-body">
                 <div class="entry-title">${title}</div>
@@ -389,7 +389,7 @@ function renderEntry(e) {
                 ${summary}
             </div>
             <div class="entry-actions">
-                <button class="btn-delete" onclick="event.stopPropagation(); deleteEntry(${e.id}, '${escapeAttr(e.title || 'Untitled')}')" title="删除">🗑</button>
+                <button class="btn-delete" data-delete-id="${e.id}" data-delete-title="${escapeAttr(e.title || 'Untitled')}" title="删除">🗑</button>
             </div>
         </div>`;
 }
@@ -514,6 +514,23 @@ async function doCapture() {
 
 loadStats();
 loadEntries();
+
+// Event delegation for entry list
+document.getElementById('results').addEventListener('click', function(e) {
+    const btn = e.target.closest('.btn-delete');
+    if (btn) {
+        e.preventDefault();
+        e.stopPropagation();
+        const id = btn.dataset.deleteId;
+        const title = btn.dataset.deleteTitle;
+        deleteEntry(Number(id), title);
+        return;
+    }
+    const entry = e.target.closest('.entry');
+    if (entry && entry.dataset.id) {
+        location.href = '/detail/' + entry.dataset.id;
+    }
+});
 </script>
 </body>
 </html>
