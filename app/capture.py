@@ -1,5 +1,4 @@
 import json
-import subprocess
 import re
 import hashlib
 from pathlib import Path
@@ -9,10 +8,7 @@ import httpx
 import trafilatura
 from bs4 import BeautifulSoup
 
-from app.config import (
-    IMAGES_DIR, GALLERY_DL_CONFIG, TWITTER_AUTH_TOKEN, TWITTER_CT0,
-    get_gallery_dl_config,
-)
+from app.config import IMAGES_DIR
 from app.database import (
     insert_entry, insert_image, get_entry_by_url,
 )
@@ -31,12 +27,6 @@ def detect_url_type(url: str) -> str:
     return "article"
 
 
-def write_gallery_dl_config():
-    """Write gallery-dl config file with Twitter cookies."""
-    config = get_gallery_dl_config()
-    GALLERY_DL_CONFIG.write_text(json.dumps(config, indent=2))
-
-
 def url_hash(url: str) -> str:
     return hashlib.md5(url.encode()).hexdigest()[:12]
 
@@ -47,7 +37,6 @@ async def download_image(url: str, entry_id: int, index: int, client: httpx.Asyn
         resp = await client.get(url, follow_redirects=True, timeout=30)
         if resp.status_code != 200:
             return None
-        # Determine extension from content-type or URL
         content_type = resp.headers.get("content-type", "")
         if "webp" in content_type:
             ext = ".webp"
@@ -57,7 +46,6 @@ async def download_image(url: str, entry_id: int, index: int, client: httpx.Asyn
             ext = ".gif"
         else:
             ext = ".jpg"
-        # Build filename
         entry_dir = IMAGES_DIR / str(entry_id)
         entry_dir.mkdir(parents=True, exist_ok=True)
         filename = f"{index:02d}{ext}"
@@ -69,96 +57,86 @@ async def download_image(url: str, entry_id: int, index: int, client: httpx.Asyn
 
 
 async def capture_tweet(url: str) -> dict:
-    """Capture a tweet using gallery-dl."""
-    write_gallery_dl_config()
+    """Capture a tweet using FxTwitter API (no auth needed)."""
+    # Extract tweet ID
+    match = None
+    for pattern in TWITTER_PATTERNS:
+        match = pattern.search(url)
+        if match:
+            break
 
-    # Normalize URL
-    clean_url = url.split("?")[0]
+    if not match:
+        return {"error": "Could not extract tweet ID from URL"}
 
-    # Run gallery-dl with JSON output
-    try:
-        result = subprocess.run(
-            ["gallery-dl", "--config", str(GALLERY_DL_CONFIG), "-j", clean_url],
-            capture_output=True, text=True, timeout=120,
-        )
-    except FileNotFoundError:
-        return {"error": "gallery-dl not installed"}
-    except subprocess.TimeoutExpired:
-        return {"error": "gallery-dl timeout"}
+    tweet_id = match.group(1)
+    # Extract username from URL
+    username_match = re.search(r"(?:twitter\.com|x\.com)/(\w+)/status/", url)
+    username = username_match.group(1) if username_match else "i"
 
-    if result.returncode != 0:
-        stderr = result.stderr.strip()
-        return {"error": f"gallery-dl failed: {stderr[:200]}"}
+    # Use FxTwitter API
+    api_url = f"https://api.fxtwitter.com/{username}/status/{tweet_id}"
 
-    # Parse JSON output - gallery-dl outputs one JSON array per tweet
-    try:
-        # gallery-dl -j outputs multiple JSON arrays, one per tweet in thread
-        raw = result.stdout.strip()
-        if not raw:
-            return {"error": "gallery-dl returned empty output"}
-        # Each line is a JSON array [category, metadata]
-        items = []
-        for line in raw.split("\n"):
-            line = line.strip()
-            if not line:
-                continue
-            parsed = json.loads(line)
-            if isinstance(parsed, list) and len(parsed) >= 2:
-                items.append(parsed[1])
-            elif isinstance(parsed, dict):
-                items.append(parsed)
-        if not items:
-            return {"error": "No tweet data found"}
-    except json.JSONDecodeError as e:
-        return {"error": f"JSON parse error: {e}"}
+    async with httpx.AsyncClient(follow_redirects=True, timeout=30) as client:
+        try:
+            resp = await client.get(api_url, headers={"User-Agent": "KnowledgeBase/1.0"})
+            if resp.status_code != 200:
+                return {"error": f"FxTwitter API returned {resp.status_code}"}
+            data = resp.json()
+        except httpx.HTTPError as e:
+            return {"error": f"FxTwitter fetch failed: {e}"}
+        except json.JSONDecodeError:
+            return {"error": "FxTwitter returned invalid JSON"}
 
-    # Combine thread tweets
-    first = items[0]
-    author = first.get("author", {}).get("name", "") if isinstance(first.get("author"), dict) else first.get("author", "")
-    handle = first.get("author", {}).get("nick", "") if isinstance(first.get("author"), dict) else ""
-    date = first.get("date", "")
+    # Parse response
+    tweet = data.get("tweet", {})
+    if not tweet:
+        return {"error": "No tweet data in response"}
 
-    # Build full text from all tweets in thread
-    texts = []
+    author = tweet.get("author", {})
+    author_name = author.get("name", "")
+    author_handle = author.get("screen_name", "") or username
+    date = tweet.get("created_at", "")
+    full_text = tweet.get("text", "")
+    lang = tweet.get("lang", "")
+
+    # Extract media
     all_images = []
-    for item in items:
-        tweet_text = item.get("content", "") or item.get("description", "")
-        if tweet_text:
-            texts.append(tweet_text)
-        # Collect image URLs
-        if item.get("url"):
-            img_url = item["url"]
-            if isinstance(img_url, str) and any(img_url.lower().endswith(ext) for ext in [".jpg", ".jpeg", ".png", ".gif", ".webp"]):
+    media = tweet.get("media", {})
+    if media:
+        for photo in media.get("photos", []):
+            img_url = photo.get("url", "")
+            if img_url:
                 all_images.append(img_url)
-        # Also check for multiple media
-        for media_key in ["media", "images"]:
-            media = item.get(media_key, [])
-            if isinstance(media, list):
-                for m in media:
-                    if isinstance(m, str):
-                        all_images.append(m)
-                    elif isinstance(m, dict) and m.get("url"):
-                        all_images.append(m["url"])
+        # Also check videos (just get thumbnail)
+        for video in media.get("videos", []):
+            thumb = video.get("thumbnail_url", "") or video.get("url", "")
+            if thumb:
+                all_images.append(thumb)
 
-    full_text = "\n\n---\n\n".join(texts) if texts else ""
-    title = f"@{handle}: {texts[0][:80]}..." if texts else f"Tweet by @{handle}"
-    summary = texts[0][:300] if texts else ""
+    # Check for quoted tweet
+    quoted = tweet.get("quote", {})
+    if quoted:
+        qt_text = quoted.get("text", "")
+        qt_author = quoted.get("author", {}).get("screen_name", "")
+        if qt_text:
+            full_text += f"\n\n--- Quoted @{qt_author} ---\n{qt_text}"
+        qt_media = quoted.get("media", {})
+        if qt_media:
+            for photo in qt_media.get("photos", []):
+                img_url = photo.get("url", "")
+                if img_url:
+                    all_images.append(img_url)
 
-    # Deduplicate images
-    seen = set()
-    unique_images = []
-    for img in all_images:
-        if img not in seen:
-            seen.add(img)
-            unique_images.append(img)
+    title = f"@{author_handle}: {full_text[:80]}..." if full_text else f"Tweet by @{author_handle}"
+    summary = full_text[:300] if full_text else ""
 
     return {
         "title": title,
         "summary": summary,
         "full_text": full_text,
-        "author": f"@{handle}" if handle else author,
+        "author": f"@{author_handle}",
         "date": date,
-        "images": unique_images,
+        "images": all_images,
         "tags": extract_tags(full_text),
     }
 
@@ -179,7 +157,6 @@ async def capture_article(url: str) -> dict:
         html = resp.text
         base_url = str(resp.url)
 
-        # Extract with trafilatura
         result = trafilatura.extract(
             html,
             include_links=True,
@@ -191,7 +168,6 @@ async def capture_article(url: str) -> dict:
         )
 
         if not result:
-            # Fallback: basic BeautifulSoup extraction
             soup = BeautifulSoup(html, "lxml")
             title_tag = soup.find("title")
             title = title_tag.get_text().strip() if title_tag else url
@@ -200,31 +176,25 @@ async def capture_article(url: str) -> dict:
             author = ""
             date = ""
         else:
-            # trafilatura returns metadata dict + text
-            # When with_metadata=True, it returns a dict
             if isinstance(result, dict):
                 title = result.get("title", "")
                 full_text = result.get("text", "")
                 author = result.get("author", "")
                 date = result.get("date", "")
             else:
-                # Plain text
                 full_text = result
-                # Extract title from HTML
                 soup = BeautifulSoup(html, "lxml")
                 title_tag = soup.find("title")
                 title = title_tag.get_text().strip() if title_tag else url
                 author = ""
                 date = ""
 
-        # Extract images from HTML
         soup = BeautifulSoup(html, "lxml")
         images = []
         for img in soup.find_all("img"):
             src = img.get("src") or img.get("data-src") or ""
             if not src:
                 continue
-            # Make absolute URL
             if src.startswith("//"):
                 src = "https:" + src
             elif src.startswith("/"):
@@ -232,7 +202,6 @@ async def capture_article(url: str) -> dict:
                 src = f"{parsed.scheme}://{parsed.netloc}{src}"
             elif not src.startswith("http"):
                 continue
-            # Skip tiny images (icons, tracking pixels)
             width = img.get("width", "")
             height = img.get("height", "")
             if width and height:
@@ -243,7 +212,6 @@ async def capture_article(url: str) -> dict:
                     pass
             images.append(src)
 
-        # Deduplicate
         seen = set()
         unique_images = []
         for img in images:
@@ -260,7 +228,7 @@ async def capture_article(url: str) -> dict:
             "full_text": full_text,
             "author": author,
             "date": date,
-            "images": unique_images[:20],  # Limit to 20 images
+            "images": unique_images[:20],
             "tags": extract_tags(full_text),
         }
 
@@ -271,7 +239,6 @@ def extract_tags(text: str) -> list:
         return []
     tags = set()
     text_lower = text.lower()
-    # Crypto tags
     crypto_keywords = {
         "bitcoin": "bitcoin", "btc": "bitcoin",
         "ethereum": "ethereum", "eth": "ethereum",
@@ -283,7 +250,6 @@ def extract_tags(text: str) -> list:
     for keyword, tag in crypto_keywords.items():
         if keyword in text_lower:
             tags.add(tag)
-    # Tech tags
     tech_keywords = {
         "python": "python", "javascript": "javascript",
         "rust": "rust", "golang": "golang", "go ": "golang",
@@ -299,7 +265,6 @@ def extract_tags(text: str) -> list:
 
 async def process_capture(url: str) -> dict:
     """Main entry point: detect type, capture, store."""
-    # Check if already captured
     existing = get_entry_by_url(url)
     if existing:
         return {"status": "exists", "entry_id": existing["id"], "title": existing["title"]}
@@ -312,7 +277,6 @@ async def process_capture(url: str) -> dict:
         result = await capture_article(url)
 
     if "error" in result:
-        # Store failed entry
         entry_id = insert_entry(
             url=url, content_type=url_type, title="", summary="",
             tags=[], full_text="", status="error",
@@ -320,7 +284,6 @@ async def process_capture(url: str) -> dict:
         )
         return {"status": "error", "error": result["error"], "entry_id": entry_id}
 
-    # Insert into database
     entry_id = insert_entry(
         url=url,
         content_type=url_type,
@@ -333,7 +296,6 @@ async def process_capture(url: str) -> dict:
         status="done",
     )
 
-    # Download images
     downloaded = 0
     async with httpx.AsyncClient(follow_redirects=True, timeout=30) as client:
         for i, img_url in enumerate(result.get("images", [])):
