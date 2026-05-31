@@ -98,7 +98,7 @@ def markdown_to_html(text: str) -> str:
         # Regular paragraph — escape HTML then linkify URLs
         escaped = stripped.replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
         linked = re.sub(
-            r'(https?://[^\s<>&"]+)',
+            r'(https?://[^\s<>&"\u3000-\u303F\uFF00-\uFFEF]+)',
             r'<a href="\1" target="_blank" rel="noopener">\1</a>',
             escaped
         )
