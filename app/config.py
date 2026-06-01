@@ -8,7 +8,7 @@ IMAGES_DIR = DATA_DIR / "images"
 GALLERY_DL_CONFIG = Path("/tmp/gallery-dl-config.json")
 
 # Twitter cookies
-TWITTER_AUTH_TOKEN = os.getenv("TWITTER_AUTH_TOKEN", "")
+TWITTER_AUTH_TOKEN=os.getenv("TWITTER_AUTH_TOKEN", "")
 TWITTER_CT0 = os.getenv("TWITTER_CT0", "")
 # Server
 HOST = os.getenv("KB_HOST", "0.0.0.0")
@@ -51,6 +51,7 @@ def get_gallery_dl_config() -> dict:
         },
     }
     return config
+
 
 # AI Configuration for title generation
 OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY", "")

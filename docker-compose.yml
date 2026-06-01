@@ -12,9 +12,9 @@ services:
       - KB_DB_PATH=/data/knowledge.db
       - KB_HOST=0.0.0.0
       - KB_PORT=8501
-      - OPENROUTER_API_KEY=${OPENROUTER_API_KEY}
-      - OPENROUTER_BASE_URL=${OPENROUTER_BASE_URL:-https://openrouter.ai/api/v1}
-      - AI_MODEL=${AI_MODEL:-stepfun/step-3.7-flash}
+      - OPENROUTER_API_KEY=tp-s0c7vidm4i1mz9ce1ximry6lfke8a4rl0yqxnwxjv5ntdcst
+      - OPENROUTER_BASE_URL=https://token-plan-sgp.xiaomimimo.com/v1
+      - AI_MODEL=mimo-v2.5-pro
 
 volumes:
   kb-data:
