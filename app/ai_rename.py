@@ -59,8 +59,8 @@ async def generate_title(content: str, content_type: str = "article", url: str =
         "Content-Type": "application/json",
     }
     
-    # Use a cheaper/faster model for title generation
-    title_model = "google/gemini-2.0-flash-001"  # Fast and cheap
+    # Use configured model for title generation
+    title_model = AI_MODEL  # Use the model from config
     
     payload = {
         "model": title_model,
