@@ -461,6 +461,21 @@ async def process_capture(url: str, title_override: str | None = None) -> dict:
         )
         return {"status": "error", "error": result["error"], "entry_id": entry_id}
 
+    # Generate better title using AI (unless title_override was provided)
+    if not title_override and result.get("full_text"):
+        try:
+            from app.ai_rename import generate_title as ai_generate_title
+            ai_title = await ai_generate_title(
+                result["full_text"], 
+                content_type=url_type,
+                url=url
+            )
+            if ai_title and ai_title != "Untitled":
+                result["title"] = ai_title
+        except Exception as e:
+            print(f"AI title generation failed, using local title: {e}")
+            # Keep the local-generated title as fallback
+
     # Verify web article completeness (simple word count check)
     verification = result.get("_verification")
     if url_type == "article" and not verification:
