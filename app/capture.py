@@ -52,70 +52,56 @@ EMOJI_RE = re.compile(
     flags=re.UNICODE,
 )
 
+# Common intro fluff patterns to skip in tweets
+INTRO_PATTERNS = [
+    re.compile(r"^推荐一下"),
+    re.compile(r"^分享一下"),
+    re.compile(r"^今天给大家"),
+    re.compile(r"^给大家推荐"),
+    re.compile(r"^有人用"),
+    re.compile(r"^你可能"),
+    re.compile(r"^很多人"),
+    re.compile(r"^最近"),
+    re.compile(r"^刚刚"),
+    re.compile(r"^终于"),
+    re.compile(r"^真香"),
+    re.compile(r"^🆓"),
+    re.compile(r"^推荐"),
+    re.compile(r"^分享"),
+    re.compile(r"^介绍"),
+    re.compile(r"^安利"),
+]
 
-def generate_title(text: str, author: str = "") -> str:
-    """Generate a concise one-sentence title from text. No author prefix."""
-    if not text:
-        return f"@{author} 的推文" if author else "Untitled"
 
-    # Clean up: remove emojis, URLs, quoted tweet markers, markdown formatting
+def _is_intro_sentence(text: str) -> bool:
+    """Check if text looks like an intro/fluff sentence."""
+    for pattern in INTRO_PATTERNS:
+        if pattern.search(text):
+            return True
+    return False
+
+
+def _extract_sentences(text: str) -> list:
+    """Split text into sentences."""
+    # Split on common sentence endings
+    sentences = re.split(r'[。！？!?\n]+', text)
+    return [s.strip() for s in sentences if s.strip() and len(s.strip()) > 5]
+
+
+def _clean_text(text: str) -> str:
+    """Clean text for title generation."""
     clean = EMOJI_RE.sub("", text)
     clean = re.sub(r"https?://\S+", "", clean)
     clean = re.sub(r"\n--- Quoted @\w+ ---.*", "", clean, flags=re.DOTALL)
-    # Remove markdown quote blocks (> entire line content)
     clean = re.sub(r"^>.*$", "", clean, flags=re.MULTILINE)
-    # Remove markdown headings (# ## ###)
     clean = re.sub(r"^#{1,6}\s*", "", clean, flags=re.MULTILINE)
-    # Remove markdown bold/italic
     clean = re.sub(r"\*{1,3}(.+?)\*{1,3}", r"\1", clean)
-    # Remove markdown code blocks
     clean = re.sub(r"```[\s\S]*?```", "", clean)
     clean = re.sub(r"`([^`]+)`", r"\1", clean)
-    # Remove markdown links [text](url) → text
     clean = re.sub(r"\[([^\]]+)\]\([^)]+\)", r"\1", clean)
-    # Collapse whitespace
     clean = re.sub(r"\s+", " ", clean).strip()
-
-    # Remove leading @mentions (common in retweets/quotes)
     clean = re.sub(r"^@\w+\s*", "", clean).strip()
-
-    if not clean:
-        return f"@{author} 的推文" if author else "Untitled"
-
-    # Take first sentence (up to 60 chars for a punchy title)
-    # Try to break at sentence-ending punctuation first
-    m = re.match(r"^(.{10,60}[。！？!?\.])", clean)
-    if m:
-        return m.group(1).strip()
-
-    # Try to break at natural pauses (，、；:)
-    m = re.match(r"^(.{10,60}[，、；：,:])", clean)
-    if m:
-        return m.group(1).strip()
-
-    # Fallback: truncate at 60 chars, try to break at word boundary
-    if len(clean) > 60:
-        # For Chinese text, just cut at 60
-        truncated = clean[:60]
-        # Try to break at last space for mixed content
-        last_space = truncated.rfind(" ")
-        if last_space > 30:
-            truncated = truncated[:last_space]
-        return truncated.rstrip("，、；：, ") + "…"
-
     return clean
-
-
-def detect_url_type(url: str) -> str:
-    """Detect if URL is a tweet, article, or unknown."""
-    for pattern in TWITTER_PATTERNS:
-        if pattern.search(url):
-            return "tweet"
-    return "article"
-
-
-def url_hash(url: str) -> str:
-    return hashlib.md5(url.encode()).hexdigest()[:12]
 
 
 async def download_image(url: str, entry_id: int, index: int, client: httpx.AsyncClient) -> str | None:
@@ -143,99 +129,172 @@ async def download_image(url: str, entry_id: int, index: int, client: httpx.Asyn
         return None
 
 
-async def capture_tweet(url: str) -> dict:
-    """Capture a tweet using FxTwitter API (no auth needed)."""
-    # Extract tweet ID
-    match = None
+def generate_title(text: str, author: str = "") -> str:
+    """Generate a concise title from text. Prioritizes content over intro fluff."""
+    if not text:
+        return f"@{author} 的推文" if author else "Untitled"
+
+    clean = _clean_text(text)
+    if not clean:
+        return f"@{author} 的推文" if author else "Untitled"
+
+    # Strategy 1: Look for frontmatter title (for articles)
+    frontmatter_match = re.search(r"^---\s*\n.*?title:\s*(.+?)\n.*?---", text, re.DOTALL | re.MULTILINE)
+    if frontmatter_match:
+        title = frontmatter_match.group(1).strip()
+        if title and len(title) > 5:
+            return title[:80] + ("..." if len(title) > 80 else "")
+
+    # Strategy 2: Extract sentences and find the best one
+    sentences = _extract_sentences(clean)
+    
+    if not sentences:
+        return clean[:60] + ("..." if len(clean) > 60 else "")
+
+    # Topic indicators (sentences describing what something IS)
+    topic_indicators = ['：', ':', '是', '叫做', '名为', '就是']
+
+    # First pass: sentences with topic indicators (not intro)
+    for sentence in sentences:
+        if len(sentence) < 10 or len(sentence) > 60:
+            continue
+        
+        if _is_intro_sentence(sentence):
+            continue
+        
+        for indicator in topic_indicators:
+            if indicator in sentence:
+                return sentence
+
+    # Second pass: sentences that are not intro
+    for sentence in sentences:
+        if len(sentence) < 10 or len(sentence) > 60:
+            continue
+        
+        if not _is_intro_sentence(sentence):
+            return sentence
+
+    # Third pass: any sentence with reasonable length
+    for sentence in sentences:
+        if 15 <= len(sentence) <= 50:
+            return sentence
+
+    # Fallback: first sentence, truncated
+    best = sentences[0]
+    if len(best) > 60:
+        best = best[:60]
+        last_pause = max(best.rfind('，'), best.rfind('：'), best.rfind('、'))
+        if last_pause > 30:
+            best = best[:last_pause]
+        else:
+            best = best.rstrip("，、；：, ") + "..."
+    return best
+
+
+def detect_url_type(url: str) -> str:
+    """Detect if URL is a tweet, article, or unknown."""
     for pattern in TWITTER_PATTERNS:
-        match = pattern.search(url)
-        if match:
+        if pattern.search(url):
+            return "tweet"
+    return "article"
+
+
+async def capture_tweet(url: str) -> dict:
+    """Capture a tweet using FxTwitter API."""
+    # Extract tweet ID
+    tweet_id = None
+    for pattern in TWITTER_PATTERNS:
+        m = pattern.search(url)
+        if m:
+            tweet_id = m.group(1)
             break
-
-    if not match:
-        return {"error": "Could not extract tweet ID from URL"}
-
-    tweet_id = match.group(1)
-    # Extract username from URL
-    username_match = re.search(r"(?:twitter\.com|x\.com)/(\w+)/status/", url)
-    username = username_match.group(1) if username_match else "i"
-
+    
+    if not tweet_id:
+        return {"error": "Invalid tweet URL"}
+    
     # Use FxTwitter API
-    api_url = f"https://api.fxtwitter.com/{username}/status/{tweet_id}"
-
+    api_url = f"https://api.fxtwitter.com/status/{tweet_id}"
+    
     async with httpx.AsyncClient(follow_redirects=True, timeout=30) as client:
         try:
-            resp = await client.get(api_url, headers={"User-Agent": "KnowledgeBase/1.0"})
-            if resp.status_code != 200:
-                return {"error": f"FxTwitter API returned {resp.status_code}"}
-            data = resp.json()
-        except httpx.HTTPError as e:
-            return {"error": f"FxTwitter fetch failed: {e}"}
-        except json.JSONDecodeError:
-            return {"error": "FxTwitter returned invalid JSON"}
-
-    # Parse response
+            response = await client.get(api_url)
+            response.raise_for_status()
+            data = response.json()
+        except Exception as e:
+            return {"error": f"Failed to fetch tweet: {str(e)}"}
+    
     tweet = data.get("tweet", {})
     if not tweet:
-        return {"error": "No tweet data in response"}
-
-    author = tweet.get("author", {})
-    author_name = author.get("name", "")
-    author_handle = author.get("screen_name", "") or username
+        return {"error": "Tweet not found"}
+    
+    # Extract content
+    text = tweet.get("text", "")
+    author = tweet.get("author", {}).get("screen_name", "")
     date = tweet.get("created_at", "")
-    full_text = tweet.get("text", "")
-    lang = tweet.get("lang", "")
-
-    # Extract media
+    
+    # Extract images
     all_images = []
-    media = tweet.get("media", {})
-    if media:
-        for photo in media.get("photos", []):
-            img_url = photo.get("url", "")
-            if img_url:
-                all_images.append(img_url)
-        # Also check videos (just get thumbnail)
-        for video in media.get("videos", []):
-            thumb = video.get("thumbnail_url", "") or video.get("url", "")
-            if thumb:
-                all_images.append(thumb)
-
-    # Check for quoted tweet
-    quoted = tweet.get("quote", {})
-    if quoted:
-        qt_text = quoted.get("text", "")
-        qt_author = quoted.get("author", {}).get("screen_name", "")
-        if qt_text:
-            full_text += f"\n\n--- Quoted @{qt_author} ---\n{qt_text}"
-        qt_media = quoted.get("media", {})
-        if qt_media:
-            for photo in qt_media.get("photos", []):
-                img_url = photo.get("url", "")
-                if img_url:
-                    all_images.append(img_url)
-
-    # Handle X Article (long-form content)
-    verification = None
+    media = tweet.get("media", [])
+    for item in media:
+        if item.get("type") == "photo":
+            all_images.append(item.get("url", ""))
+        elif item.get("type") == "video":
+            # Use thumbnail for video
+            all_images.append(item.get("thumbnail_url", ""))
+    
+    # Handle X Article (long tweets)
     article = tweet.get("article", {})
-    if article and not full_text.strip():
-        # This is an X Article - extract content from blocks/entityMap
-        article_content = extract_x_article(article)
-        full_text = article_content["text"]
-        all_images.extend(article_content["images"])
+    if article:
+        # Article content is in Draft.js blocks
+        content = article.get("content", {})
+        blocks = content.get("blocks", [])
+        entity_map = content.get("entityMap", [])
         
-        # Verify capture completeness
-        blocks = article.get("content", {}).get("blocks", [])
-        entity_map = article.get("content", {}).get("entityMap", [])
-        verification = verify_article_capture(blocks, entity_map, full_text, all_images)
+        # Extract text from blocks
+        full_text_parts = []
+        for block in blocks:
+            btype = block.get("type", "")
+            block_text = block.get("text", "")
+            
+            if btype == "atomic":
+                # Check for media in entityMap
+                for entity_range in block.get("entityRanges", []):
+                    key = str(entity_range.get("key", ""))
+                    entity = entity_map[int(key)] if int(key) < len(entity_map) else {}
+                    if entity.get("type") == "IMAGE":
+                        img_data = entity.get("data", {})
+                        img_url = img_data.get("media_url_https") or img_data.get("url", "")
+                        if img_url:
+                            all_images.append(img_url)
+                            full_text_parts.append(f"![图片]({img_url})")
+            else:
+                if block_text:
+                    full_text_parts.append(block_text)
+        
+        full_text = "\n\n".join(full_text_parts)
+        
+        # Also check for cover media
+        cover_media = article.get("cover_media", {})
+        if cover_media:
+            cover_url = cover_media.get("media_url_https") or cover_media.get("url", "")
+            if cover_url and cover_url not in all_images:
+                all_images.insert(0, cover_url)
+    else:
+        full_text = text
+    
+    # Verify capture completeness
+    blocks = article.get("content", {}).get("blocks", []) if article else []
+    entity_map = article.get("content", {}).get("entityMap", []) if article else []
+    verification = verify_article_capture(blocks, entity_map, full_text, all_images)
 
-    title = generate_title(full_text, author_handle)
+    title = generate_title(full_text, author)
     summary = full_text[:300] if full_text else ""
 
     ret = {
         "title": title,
         "summary": summary,
         "full_text": full_text,
-        "author": f"@{author_handle}",
+        "author": f"@{author}",
         "date": date,
         "images": all_images,
         "tags": extract_tags(full_text),
@@ -246,15 +305,7 @@ async def capture_tweet(url: str) -> dict:
 
 
 def verify_article_capture(blocks: list, entity_map: list, captured_text: str, captured_images: list) -> dict:
-    """Verify captured article content matches original Draft.js blocks.
-    
-    Returns dict with:
-      - ok: bool
-      - missing_blocks: list of text segments not found in captured_text
-      - missing_images: count of expected images not captured
-      - coverage: float (0-1) of text blocks found in captured content
-    """
-    # Extract all text segments from original blocks
+    """Verify captured article content matches original Draft.js blocks."""
     original_segments = []
     expected_images = 0
     
@@ -263,265 +314,124 @@ def verify_article_capture(blocks: list, entity_map: list, captured_text: str, c
         text = block.get("text", "").strip()
         er = block.get("entityRanges", [])
         
-        # Count MEDIA entities
-        for r in er:
-            ek = int(r.get("key", -1))
-            if 0 <= ek < len(entity_map):
-                if entity_map[ek].get("value", {}).get("type") == "MEDIA":
+        if btype == "atomic":
+            for entity_range in er:
+                key = str(entity_range.get("key", ""))
+                entity = entity_map[int(key)] if int(key) < len(entity_map) else {}
+                if entity.get("type") == "IMAGE":
                     expected_images += 1
-        
-        # Collect text content (skip atomic blocks and empty text)
-        if btype != "atomic" and text and len(text) > 5:
-            # Strip leading emoji/symbols for comparison
-            clean = re.sub(r'^[🚨🛠💾🛑💡⚡🔧🎯📊🔍]+\s*', '', text)
-            if clean:
-                original_segments.append(clean)
+        else:
+            if text and len(text) > 5:
+                original_segments.append(text)
     
-    # Check each segment against captured text
-    captured_clean = re.sub(r'[#*`\[\]()>-]', '', captured_text)  # strip markdown
-    captured_clean = re.sub(r'\s+', ' ', captured_clean)
+    if not original_segments:
+        return None
     
+    # Check coverage
+    found = 0
     missing = []
-    for seg in original_segments:
-        # Check if the first 20 chars of the segment appear in captured text
-        check = seg[:20].strip()
-        if check and check not in captured_clean:
-            missing.append(seg[:80])
+    for segment in original_segments:
+        # Check if segment (first 20 chars) appears in captured text
+        if segment[:20] in captured_text:
+            found += 1
+        else:
+            missing.append(segment[:50])
     
-    coverage = 1 - (len(missing) / max(len(original_segments), 1))
-    img_ok = len(captured_images) >= min(expected_images, 1)
+    coverage = found / len(original_segments) if original_segments else 0
     
-    result = {
-        "ok": coverage >= 0.8 and img_ok,
+    return {
+        "ok": coverage >= 0.8 and len(captured_images) >= expected_images * 0.5,
         "coverage": round(coverage, 2),
         "total_segments": len(original_segments),
-        "missing_blocks": missing,
+        "missing_blocks": missing[:5],
         "expected_images": expected_images,
         "captured_images": len(captured_images),
     }
-    
-    if not result["ok"]:
-        import logging
-        logging.warning(f"Article capture verification FAILED: coverage={coverage:.0%}, "
-                       f"missing={len(missing)} segments, images={len(captured_images)}/{expected_images}")
-        for m in missing[:3]:
-            logging.warning(f"  Missing: {m}...")
-    
-    return result
-
-
-def extract_x_article(article: dict) -> dict:
-    """Extract content from X Article (Draft.js format)."""
-    blocks = article.get("content", {}).get("blocks", [])
-    entity_map = article.get("content", {}).get("entityMap", [])
-    media_entities = article.get("media_entities", [])
-
-    # Extract code blocks from entityMap
-    md_by_index = {}
-    for idx, e in enumerate(entity_map):
-        if e.get("value", {}).get("type") == "MARKDOWN":
-            md_by_index[idx] = e["value"]["data"]["markdown"]
-
-    # Map image URLs from media_entities
-    media_entity_order = [(i, e) for i, e in enumerate(entity_map) if e.get("value", {}).get("type") == "MEDIA"]
-    media_url_by_entitymap_idx = {}
-    for seq_idx, (emap_idx, _) in enumerate(media_entity_order):
-        if seq_idx < len(media_entities):
-            url = media_entities[seq_idx].get("media_info", {}).get("original_img_url", "")
-            if url:
-                media_url_by_entitymap_idx[emap_idx] = url
-
-    # Build content
-    output_lines = []
-    all_images = []
-    img_count = 0
-    deferred_media_urls = []  # MEDIA from non-atomic blocks, inserted at end
-
-    for block in blocks:
-        btype = block.get("type", "")
-        text = block.get("text", "").strip()
-        er = block.get("entityRanges", [])
-
-        # Check for MEDIA entities in this block
-        media_in_block = None
-        if er:
-            for r in er:
-                ek = int(r["key"])
-                if ek in media_url_by_entitymap_idx:
-                    media_in_block = media_url_by_entitymap_idx[ek]
-                    break
-
-        if btype == "atomic" and er:
-            ek = int(er[0]["key"])
-            if ek in md_by_index:
-                output_lines.append("")
-                output_lines.append(md_by_index[ek])
-                output_lines.append("")
-            elif media_in_block:
-                # Atomic MEDIA block — insert image inline here
-                img_count += 1
-                all_images.append(media_in_block)
-                output_lines.append("")
-                output_lines.append(f"![图片{img_count}]({media_in_block})")
-                output_lines.append("")
-            continue
-
-        # Non-atomic block with MEDIA — defer to end of article
-        if media_in_block and media_in_block not in deferred_media_urls:
-            deferred_media_urls.append(media_in_block)
-
-        if text:
-            if btype == "header-two":
-                output_lines.append(f"\n## {text}")
-            elif btype == "header-three":
-                output_lines.append(f"\n### {text}")
-            elif btype == "blockquote":
-                output_lines.append(f"> {text}")
-            elif btype == "ordered-list-item":
-                output_lines.append(f"1. {text}")
-            elif btype == "unordered-list-item":
-                output_lines.append(f"- {text}")
-            else:
-                output_lines.append(text)
-
-    # Insert deferred MEDIA images at end (before cover)
-    for img_url in deferred_media_urls:
-        img_count += 1
-        all_images.append(img_url)
-        output_lines.append("")
-        output_lines.append(f"![图片{img_count}]({img_url})")
-
-    # Also add cover image if present
-    cover_url = article.get("cover_media", {}).get("media_info", {}).get("original_img_url", "")
-    if cover_url and cover_url not in all_images:
-        all_images.insert(0, cover_url)
-
-    return {
-        "text": "\n".join(output_lines),
-        "images": all_images,
-    }
-
-
-async def capture_article(url: str) -> dict:
-    """Capture a web article using trafilatura."""
-    headers = {
-        "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-    }
-
-    async with httpx.AsyncClient(follow_redirects=True) as client:
-        try:
-            resp = await client.get(url, headers=headers, timeout=30)
-            resp.raise_for_status()
-        except Exception as e:
-            return {"error": f"Fetch failed: {e}"}
-
-        html = resp.text
-        base_url = str(resp.url)
-
-        result = trafilatura.extract(
-            html,
-            include_links=True,
-            include_images=True,
-            include_tables=True,
-            include_formatting=True,
-            output_format="txt",
-            with_metadata=True,
-        )
-
-        if not result:
-            soup = BeautifulSoup(html, "lxml")
-            title_tag = soup.find("title")
-            title = title_tag.get_text().strip() if title_tag else url
-            body = soup.find("article") or soup.find("main") or soup.find("body")
-            full_text = body.get_text(separator="\n", strip=True) if body else ""
-            author = ""
-            date = ""
-        else:
-            if isinstance(result, dict):
-                title = result.get("title", "")
-                full_text = result.get("text", "")
-                author = result.get("author", "")
-                date = result.get("date", "")
-            else:
-                full_text = result
-                soup = BeautifulSoup(html, "lxml")
-                title_tag = soup.find("title")
-                title = title_tag.get_text().strip() if title_tag else url
-                author = ""
-                date = ""
-
-        soup = BeautifulSoup(html, "lxml")
-        images = []
-        for img in soup.find_all("img"):
-            src = img.get("src") or img.get("data-src") or ""
-            if not src:
-                continue
-            if src.startswith("//"):
-                src = "https:" + src
-            elif src.startswith("/"):
-                parsed = urlparse(base_url)
-                src = f"{parsed.scheme}://{parsed.netloc}{src}"
-            elif not src.startswith("http"):
-                continue
-            width = img.get("width", "")
-            height = img.get("height", "")
-            if width and height:
-                try:
-                    if int(width) < 100 or int(height) < 100:
-                        continue
-                except ValueError:
-                    pass
-            images.append(src)
-
-        seen = set()
-        unique_images = []
-        for img in images:
-            if img not in seen:
-                seen.add(img)
-                unique_images.append(img)
-
-        title = title or url
-        summary = full_text[:300] if full_text else ""
-
-        return {
-            "title": title,
-            "summary": summary,
-            "full_text": full_text,
-            "author": author,
-            "date": date,
-            "images": unique_images[:20],
-            "tags": extract_tags(full_text),
-        }
 
 
 def extract_tags(text: str) -> list:
-    """Extract simple tags from text based on keywords."""
-    if not text:
-        return []
-    tags = set()
+    """Extract tags from text."""
+    tags = []
+    # Common tech/crypto tags
+    tag_patterns = {
+        "crypto": ["比特币", "BTC", "以太坊", "ETH", "加密货币", "区块链", "Web3", "DeFi", "NFT"],
+        "ai": ["AI", "人工智能", "GPT", "Claude", "机器学习", "深度学习", "LLM"],
+        "programming": ["Python", "JavaScript", "Rust", "Go", "编程", "代码", "GitHub"],
+        "vps": ["VPS", "服务器", "部署", "Docker", "容器"],
+    }
+    
     text_lower = text.lower()
-    crypto_keywords = {
-        "bitcoin": "bitcoin", "btc": "bitcoin",
-        "ethereum": "ethereum", "eth": "ethereum",
-        "solana": "solana", "sol": "solana",
-        "defi": "defi", "nft": "nft", "web3": "web3",
-        "crypto": "crypto", "blockchain": "blockchain",
-        "token": "crypto", "dao": "dao",
+    for tag, keywords in tag_patterns.items():
+        for keyword in keywords:
+            if keyword.lower() in text_lower:
+                tags.append(tag)
+                break
+    
+    return tags[:3]  # Limit to 3 tags
+
+
+async def capture_article(url: str) -> dict:
+    """Capture a web article."""
+    async with httpx.AsyncClient(follow_redirects=True, timeout=30) as client:
+        try:
+            response = await client.get(url)
+            response.raise_for_status()
+            html = response.text
+        except Exception as e:
+            return {"error": f"Failed to fetch article: {str(e)}"}
+    
+    # Use trafilatura for content extraction
+    extracted = trafilatura.extract(html, include_comments=False, include_tables=True)
+    
+    if not extracted:
+        # Fallback to BeautifulSoup
+        soup = BeautifulSoup(html, 'html.parser')
+        
+        # Try to find title
+        title_tag = soup.find('title')
+        title = title_tag.get_text().strip() if title_tag else ""
+        
+        # Try to find main content
+        article = soup.find('article') or soup.find('main') or soup.find('body')
+        if article:
+            # Remove scripts and styles
+            for tag in article.find_all(['script', 'style', 'nav', 'header', 'footer']):
+                tag.decompose()
+            extracted = article.get_text(separator='\n', strip=True)
+        else:
+            extracted = ""
+    
+    # Extract title from HTML
+    soup = BeautifulSoup(html, 'html.parser')
+    title_tag = soup.find('title')
+    html_title = title_tag.get_text().strip() if title_tag else ""
+    
+    # Extract images
+    all_images = []
+    for img in soup.find_all('img'):
+        src = str(img.get('src', ''))
+        if src and not src.startswith('data:'):
+            # Make absolute URL
+            if not src.startswith('http'):
+                from urllib.parse import urljoin
+                src = urljoin(url, src)
+            all_images.append(src)
+    
+    # Limit images
+    all_images = all_images[:10]
+    
+    # Generate title
+    title = html_title or generate_title(extracted)
+    
+    return {
+        "title": title,
+        "summary": extracted[:300] if extracted else "",
+        "full_text": extracted or "",
+        "author": "",
+        "date": "",
+        "images": all_images,
+        "tags": extract_tags(extracted or ""),
     }
-    for keyword, tag in crypto_keywords.items():
-        if keyword in text_lower:
-            tags.add(tag)
-    tech_keywords = {
-        "python": "python", "javascript": "javascript",
-        "rust": "rust", "golang": "golang", "go ": "golang",
-        "docker": "docker", "kubernetes": "kubernetes",
-        "ai": "ai", "machine learning": "ai", "llm": "ai",
-        "api": "api",
-    }
-    for keyword, tag in tech_keywords.items():
-        if keyword in text_lower:
-            tags.add(tag)
-    return sorted(tags)[:10]
 
 
 async def process_capture(url: str, title_override: str | None = None) -> dict:
