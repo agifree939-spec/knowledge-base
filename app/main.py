@@ -13,6 +13,7 @@ from app.database import (
     delete_entry, get_stats, update_entry, get_entries_count,
 )
 from app.capture import process_capture
+from app.ai_rename import generate_title
 
 
 @asynccontextmanager
@@ -223,3 +224,24 @@ async def detail_page(request: Request, entry_id: int):
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run("app.main:app", host=HOST, port=PORT, reload=False)
+
+
+@app.post("/api/entries/{entry_id}/ai-rename")
+async def api_ai_rename(entry_id: int):
+    """Generate a new title using AI based on entry content."""
+    entry = get_entry(entry_id)
+    if not entry:
+        raise HTTPException(404, "Entry not found")
+    
+    # Use full_text or summary for title generation
+    content = entry.get("full_text") or entry.get("summary") or entry.get("title", "")
+    if not content:
+        raise HTTPException(400, "No content available for title generation")
+    
+    try:
+        new_title = await generate_title(content, entry.get("content_type", "article"))
+        # Update the entry with the new title
+        update_entry(entry_id, title=new_title)
+        return {"status": "renamed", "entry_id": entry_id, "title": new_title}
+    except Exception as e:
+        raise HTTPException(500, f"AI title generation failed: {str(e)}")

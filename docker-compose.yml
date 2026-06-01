@@ -12,6 +12,9 @@ services:
       - KB_DB_PATH=/data/knowledge.db
       - KB_HOST=0.0.0.0
       - KB_PORT=8501
+      - OPENROUTER_API_KEY=${OPENROUTER_API_KEY}
+      - OPENROUTER_BASE_URL=${OPENROUTER_BASE_URL:-https://openrouter.ai/api/v1}
+      - AI_MODEL=${AI_MODEL:-stepfun/step-3.7-flash}
 
 volumes:
   kb-data:

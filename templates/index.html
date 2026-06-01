@@ -688,83 +688,51 @@ async function deleteEntry(id, title) {
     }
 }
 
-// Inline rename
+// AI-powered rename
 function startRename(btn) {
     const entryEl = btn.closest('.entry');
     const titleRow = entryEl.querySelector('.entry-title-row');
     const titleSpan = titleRow.querySelector('.entry-title');
-    const oldTitle = btn.dataset.renameTitle;
-
-    // Replace title span + rename button with input + save/cancel
-    titleSpan.style.display = 'none';
-    btn.style.display = 'none';
-    const badge = titleRow.querySelector('.verify-ok, .verify-warn');
-    if (badge) badge.style.display = 'none';
-
-    const input = document.createElement('input');
-    input.className = 'rename-input';
-    input.value = oldTitle;
-    input.dataset.entryId = btn.dataset.renameId;
-    titleRow.insertBefore(input, titleRow.firstChild);
-
-    const actions = document.createElement('span');
-    actions.className = 'rename-actions';
-    actions.innerHTML = `
-        <button class="btn-rename-save" title="保存">✅</button>
-        <button class="btn-rename-cancel" title="取消">❌</button>
-    `;
-    titleRow.appendChild(actions);
-
-    input.focus();
-    input.select();
-
-    // Handlers
-    const cleanup = () => {
-        input.remove();
-        actions.remove();
-        titleSpan.style.display = '';
-        btn.style.display = '';
-        if (badge) badge.style.display = '';
-    };
-
-    actions.querySelector('.btn-rename-cancel').addEventListener('click', cleanup);
-
-    input.addEventListener('keydown', (e) => {
-        if (e.key === 'Escape') cleanup();
-        if (e.key === 'Enter') doRename(input, titleSpan, btn, cleanup);
-    });
-
-    actions.querySelector('.btn-rename-save').addEventListener('click', () => {
-        doRename(input, titleSpan, btn, cleanup);
+    const entryId = btn.dataset.renameId;
+    
+    // Show loading state
+    btn.disabled = true;
+    btn.textContent = '⏳';
+    btn.title = 'AI 生成标题中...';
+    
+    // Call AI rename API
+    fetch(`/api/entries/${entryId}/ai-rename`, {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'}
+    })
+    .then(r => {
+        if (!r.ok) throw new Error('AI rename failed');
+        return r.json();
+    })
+    .then(data => {
+        // Update UI with new title
+        titleSpan.textContent = data.title;
+        btn.dataset.renameTitle = data.title;
+        btn.disabled = false;
+        btn.textContent = '✏️';
+        btn.title = 'AI 重命名';
+        
+        // Show success feedback
+        const feedback = document.createElement('span');
+        feedback.className = 'rename-feedback';
+        feedback.textContent = '✓ 已更新';
+        feedback.style.cssText = 'color: #4caf50; font-size: 12px; margin-left: 8px;';
+        titleRow.appendChild(feedback);
+        setTimeout(() => feedback.remove(), 2000);
+    })
+    .catch(e => {
+        btn.disabled = false;
+        btn.textContent = '✏️';
+        btn.title = 'AI 重命名';
+        alert('AI 重命名失败: ' + e.message);
     });
 }
 
-async function doRename(input, titleSpan, btn, cleanup) {
-    const newTitle = input.value.trim();
-    if (!newTitle || newTitle === btn.dataset.renameTitle) {
-        cleanup();
-        return;
-    }
-
-    const id = input.dataset.entryId;
-    try {
-        const r = await fetch(`/api/entries/${id}`, {
-            method: 'PATCH',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({title: newTitle})
-        });
-        if (r.ok) {
-            // Update UI in place
-            titleSpan.textContent = newTitle;
-            btn.dataset.renameTitle = newTitle;
-            cleanup();
-        } else {
-            alert('重命名失败');
-        }
-    } catch(e) {
-        alert('重命名失败: ' + e.message);
-    }
-}
 
 loadStats();
 loadEntries(1);
