@@ -87,6 +87,7 @@ async def generate_title(content: str, content_type: str = "article", url: str =
         api_title = api_title.strip('"\'""''')
         
         if api_title and len(api_title) > 5:
+            print(f"AI generated title: {api_title}")
             return api_title[:80]
     except Exception as e:
         print(f"AI title generation failed: {e}")
