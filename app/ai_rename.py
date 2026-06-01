@@ -22,16 +22,7 @@ async def generate_title(content: str, content_type: str = "article", url: str =
             title = re.sub(r'\s*[-–—]\s*(作者|author|by).*$', '', title, flags=re.IGNORECASE).strip()
             return title[:80] + ("..." if len(title) > 80 else "")
     
-    # For tweets: try local generate first (fast)
-    if content_type == "tweet":
-        local_title = local_generate_title(content)
-        if local_title and local_title != "Untitled" and len(local_title) > 15:
-            # Check if it's a good topic sentence (not just intro fluff)
-            intro_patterns = ['推荐一下', '分享一下', '很多人', '今天', '刚才', '刚刚']
-            if not any(local_title.startswith(p) for p in intro_patterns):
-                return local_title
-    
-    # Use AI to generate a proper title
+    # Use AI to generate a proper title (primary method)
     if not OPENROUTER_API_KEY:
         # Fallback to local if no API key
         return local_generate_title(content) or "Untitled"
