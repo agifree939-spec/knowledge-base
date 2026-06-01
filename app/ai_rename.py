@@ -33,7 +33,7 @@ async def generate_title(content: str, content_type: str = "article") -> str:
             {"role": "system", "content": "你是一个专业的标题生成助手，擅长提炼文章核心内容生成简洁标题。"},
             {"role": "user", "content": prompt}
         ],
-        "max_tokens": 100,
+        "max_tokens": 500,
         "temperature": 0.7,
     }
     
