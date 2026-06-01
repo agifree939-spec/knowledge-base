@@ -10,7 +10,7 @@ from contextlib import asynccontextmanager
 from app.config import IMAGES_DIR, HOST, PORT
 from app.database import (
     init_db, get_entry, search_entries, list_entries,
-    delete_entry, get_stats, update_entry,
+    delete_entry, get_stats, update_entry, get_entries_count,
 )
 from app.capture import process_capture
 
@@ -170,7 +170,8 @@ async def api_list_entries(
 ):
     """List entries, optionally filtered by type."""
     results = list_entries(content_type=content_type, limit=limit, offset=offset)
-    return {"count": len(results), "results": results}
+    total = get_entries_count(content_type=content_type)
+    return {"count": len(results), "total": total, "results": results}
 
 
 @app.get("/api/entries/{entry_id}")

@@ -226,10 +226,15 @@
             margin-top: 2px;
         }
         .entry-body { flex: 1; min-width: 0; }
+        .entry-title-row {
+            display: flex;
+            align-items: center;
+            gap: 0.4rem;
+            margin-bottom: 0.35rem;
+        }
         .entry-title {
             font-size: 0.95rem;
             color: #fff;
-            margin-bottom: 0.35rem;
             line-height: 1.4;
             display: -webkit-box;
             -webkit-line-clamp: 2;
@@ -259,11 +264,11 @@
         .entry-actions {
             display: flex;
             align-items: center;
-            gap: 0.5rem;
+            gap: 0.35rem;
             flex-shrink: 0;
             margin-left: 0.5rem;
         }
-        .btn-delete {
+        .btn-icon {
             width: 32px;
             height: 32px;
             border-radius: 6px;
@@ -276,6 +281,11 @@
             align-items: center;
             justify-content: center;
             transition: all 0.2s;
+        }
+        .btn-icon:hover {
+            background: #2a2a2a;
+            color: var(--text);
+            border-color: #444;
         }
         .btn-delete:hover {
             background: var(--red-dim);
@@ -292,6 +302,102 @@
             -webkit-box-orient: vertical;
             overflow: hidden;
         }
+
+        /* Inline rename */
+        .rename-input {
+            flex: 1;
+            padding: 0.2rem 0.5rem;
+            background: var(--bg);
+            border: 1px solid var(--accent);
+            border-radius: 4px;
+            color: #fff;
+            font-size: 0.95rem;
+            outline: none;
+            min-width: 0;
+        }
+        .rename-actions {
+            display: flex;
+            gap: 0.25rem;
+            flex-shrink: 0;
+        }
+        .btn-rename-save, .btn-rename-cancel {
+            width: 28px;
+            height: 28px;
+            border-radius: 4px;
+            border: 1px solid transparent;
+            background: transparent;
+            font-size: 0.85rem;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.15s;
+        }
+        .btn-rename-save {
+            color: var(--green);
+        }
+        .btn-rename-save:hover {
+            background: var(--green-dim);
+            border-color: var(--green);
+        }
+        .btn-rename-cancel {
+            color: var(--red);
+        }
+        .btn-rename-cancel:hover {
+            background: var(--red-dim);
+            border-color: var(--red);
+        }
+
+        /* Pagination */
+        .pagination {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.5rem;
+            margin-top: 1.5rem;
+            padding-top: 1.5rem;
+            border-top: 1px solid var(--border);
+        }
+        .pagination button {
+            padding: 0.5rem 1rem;
+            background: var(--card);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            color: var(--text);
+            font-size: 0.85rem;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .pagination button:hover:not(:disabled) {
+            border-color: var(--accent);
+            color: var(--accent);
+        }
+        .pagination button:disabled {
+            opacity: 0.3;
+            cursor: not-allowed;
+        }
+        .pagination .page-info {
+            font-size: 0.85rem;
+            color: var(--text-dim);
+            padding: 0 0.5rem;
+        }
+        .pagination .page-jump {
+            display: flex;
+            align-items: center;
+            gap: 0.3rem;
+        }
+        .pagination .page-jump input {
+            width: 48px;
+            padding: 0.45rem 0.5rem;
+            background: var(--card);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            color: #fff;
+            font-size: 0.85rem;
+            text-align: center;
+            outline: none;
+        }
+        .pagination .page-jump input:focus { border-color: var(--accent); }
 
         /* Empty state */
         .empty {
@@ -327,6 +433,7 @@
             .stats { gap: 1.5rem; }
             .capture-row { flex-direction: column; }
             .entry { padding: 0.85rem 1rem; }
+            .pagination { flex-wrap: wrap; }
         }
     </style>
 </head>
@@ -365,10 +472,32 @@
         <div class="skeleton"><div class="skeleton-line med"></div><div class="skeleton-line short"></div></div>
         <div class="skeleton"><div class="skeleton-line med"></div><div class="skeleton-line short"></div></div>
     </div>
+
+    <div class="pagination" id="pagination" style="display:none;">
+        <button id="btn-first" onclick="goToPage(1)">⟪</button>
+        <button id="btn-prev" onclick="goToPage(state.page - 1)">⟨ 上一页</button>
+        <span class="page-info" id="page-info"></span>
+        <button id="btn-next" onclick="goToPage(state.page + 1)">下一页 ⟩</button>
+        <button id="btn-last" onclick="goToPage(state.totalPages)">⟫</button>
+        <div class="page-jump">
+            <span style="color:#666;font-size:0.8rem;">跳转</span>
+            <input id="page-jump-input" type="number" min="1" onkeydown="if(event.key==='Enter')jumpToPage()" />
+        </div>
+    </div>
 </div>
 
 <script>
 const ICONS = { tweet: '🐦', article: '📄' };
+const PAGE_SIZE = 20;
+
+// Pagination state
+const state = {
+    page: 1,
+    totalPages: 1,
+    total: 0,
+    mode: 'list',  // 'list' | 'search'
+    searchQuery: '',
+};
 
 function escapeHtml(s) {
     const d = document.createElement('div');
@@ -407,7 +536,11 @@ function renderEntry(e) {
             <div class="entry-icon ${iconClass}">${icon}</div>
             ${thumb}
             <div class="entry-body">
-                <div class="entry-title">${title} ${verifyBadge}</div>
+                <div class="entry-title-row">
+                    <span class="entry-title">${title}</span>
+                    ${verifyBadge}
+                    <button class="btn-icon btn-rename" data-rename-id="${e.id}" data-rename-title="${escapeAttr(e.title || '')}" title="重命名">✏️</button>
+                </div>
                 <div class="entry-meta">
                     ${author ? `<span>${escapeHtml(author)}</span>` : ''}
                     ${tags}
@@ -416,7 +549,7 @@ function renderEntry(e) {
                 ${summary}
             </div>
             <div class="entry-actions">
-                <button class="btn-delete" data-delete-id="${e.id}" data-delete-title="${escapeAttr(e.title || 'Untitled')}" title="删除">🗑</button>
+                <button class="btn-icon btn-delete" data-delete-id="${e.id}" data-delete-title="${escapeAttr(e.title || 'Untitled')}" title="删除">🗑</button>
             </div>
         </div>`;
 }
@@ -427,6 +560,40 @@ function renderEmpty(text, hint) {
         <div class="empty-text">${text}</div>
         ${hint ? `<div class="empty-hint">${hint}</div>` : ''}
     </div>`;
+}
+
+function updatePagination() {
+    const el = document.getElementById('pagination');
+    if (state.totalPages <= 1) {
+        el.style.display = 'none';
+        return;
+    }
+    el.style.display = 'flex';
+    document.getElementById('btn-first').disabled = state.page <= 1;
+    document.getElementById('btn-prev').disabled = state.page <= 1;
+    document.getElementById('btn-next').disabled = state.page >= state.totalPages;
+    document.getElementById('btn-last').disabled = state.page >= state.totalPages;
+    document.getElementById('page-info').textContent = `第 ${state.page} / ${state.totalPages} 页 (共 ${state.total} 条)`;
+    document.getElementById('page-jump-input').max = state.totalPages;
+}
+
+function goToPage(page) {
+    if (page < 1 || page > state.totalPages) return;
+    state.page = page;
+    if (state.mode === 'search') {
+        doSearch(page);
+    } else {
+        loadEntries(page);
+    }
+}
+
+function jumpToPage() {
+    const input = document.getElementById('page-jump-input');
+    const page = parseInt(input.value);
+    if (page && page >= 1 && page <= state.totalPages) {
+        goToPage(page);
+        input.value = '';
+    }
 }
 
 async function loadStats() {
@@ -440,37 +607,59 @@ async function loadStats() {
     } catch(e) {}
 }
 
-async function loadEntries() {
+async function loadEntries(page) {
+    page = page || 1;
+    state.page = page;
+    state.mode = 'list';
+    const offset = (page - 1) * PAGE_SIZE;
+
     try {
-        const r = await fetch('/api/entries?limit=50');
+        const r = await fetch(`/api/entries?limit=${PAGE_SIZE}&offset=${offset}`);
         const d = await r.json();
         const el = document.getElementById('results');
+
         if (!d.results || d.results.length === 0) {
             el.innerHTML = renderEmpty('还没有收录任何内容', '在上方粘贴链接开始收录');
+            document.getElementById('pagination').style.display = 'none';
             return;
         }
+
+        state.total = d.total || 0;
+        state.totalPages = Math.max(1, Math.ceil(state.total / PAGE_SIZE));
         el.innerHTML = d.results.map(renderEntry).join('');
+        updatePagination();
     } catch(e) {
         document.getElementById('results').innerHTML = renderEmpty('加载失败', '请刷新页面重试');
     }
 }
 
-async function doSearch() {
+async function doSearch(page) {
     const q = document.getElementById('search-q').value.trim();
     if (!q) { clearSearch(); return; }
+
+    page = page || 1;
+    state.page = page;
+    state.mode = 'search';
+    state.searchQuery = q;
+    const offset = (page - 1) * PAGE_SIZE;
 
     document.getElementById('section-label').textContent = '搜索结果';
     document.getElementById('clear-btn').style.display = 'block';
 
     try {
-        const r = await fetch('/api/search?q=' + encodeURIComponent(q));
+        const r = await fetch(`/api/search?q=${encodeURIComponent(q)}&limit=${PAGE_SIZE}&offset=${offset}`);
         const d = await r.json();
         const el = document.getElementById('results');
         if (!d.results || d.results.length === 0) {
             el.innerHTML = renderEmpty(`未找到"${q}"的相关内容`, '试试其他关键词');
+            document.getElementById('pagination').style.display = 'none';
             return;
         }
+        // Search API doesn't return total, so hide pagination for search
+        state.total = d.results.length;
+        state.totalPages = 1;
         el.innerHTML = d.results.map(renderEntry).join('');
+        updatePagination();
     } catch(e) {
         document.getElementById('results').innerHTML = renderEmpty('搜索失败', '请重试');
     }
@@ -480,7 +669,8 @@ function clearSearch() {
     document.getElementById('search-q').value = '';
     document.getElementById('section-label').textContent = '最近收录';
     document.getElementById('clear-btn').style.display = 'none';
-    loadEntries();
+    state.mode = 'list';
+    loadEntries(1);
 }
 
 async function deleteEntry(id, title) {
@@ -489,7 +679,7 @@ async function deleteEntry(id, title) {
         const r = await fetch(`/api/entries/${id}`, { method: 'DELETE' });
         if (r.ok) {
             loadStats();
-            loadEntries();
+            loadEntries(state.page);
         } else {
             alert('删除失败');
         }
@@ -498,52 +688,99 @@ async function deleteEntry(id, title) {
     }
 }
 
-async function doCapture() {
-    const url = document.getElementById('capture-url').value.trim();
-    const msg = document.getElementById('capture-msg');
-    const btn = document.getElementById('capture-btn');
-    if (!url) return;
+// Inline rename
+function startRename(btn) {
+    const entryEl = btn.closest('.entry');
+    const titleRow = entryEl.querySelector('.entry-title-row');
+    const titleSpan = titleRow.querySelector('.entry-title');
+    const oldTitle = btn.dataset.renameTitle;
 
-    btn.disabled = true;
-    btn.textContent = '⏳ 收录中...';
-    msg.className = 'msg'; msg.textContent = ''; msg.style.display = 'none';
+    // Replace title span + rename button with input + save/cancel
+    titleSpan.style.display = 'none';
+    btn.style.display = 'none';
+    const badge = titleRow.querySelector('.verify-ok, .verify-warn');
+    if (badge) badge.style.display = 'none';
 
+    const input = document.createElement('input');
+    input.className = 'rename-input';
+    input.value = oldTitle;
+    input.dataset.entryId = btn.dataset.renameId;
+    titleRow.insertBefore(input, titleRow.firstChild);
+
+    const actions = document.createElement('span');
+    actions.className = 'rename-actions';
+    actions.innerHTML = `
+        <button class="btn-rename-save" title="保存">✅</button>
+        <button class="btn-rename-cancel" title="取消">❌</button>
+    `;
+    titleRow.appendChild(actions);
+
+    input.focus();
+    input.select();
+
+    // Handlers
+    const cleanup = () => {
+        input.remove();
+        actions.remove();
+        titleSpan.style.display = '';
+        btn.style.display = '';
+        if (badge) badge.style.display = '';
+    };
+
+    actions.querySelector('.btn-rename-cancel').addEventListener('click', cleanup);
+
+    input.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') cleanup();
+        if (e.key === 'Enter') doRename(input, titleSpan, btn, cleanup);
+    });
+
+    actions.querySelector('.btn-rename-save').addEventListener('click', () => {
+        doRename(input, titleSpan, btn, cleanup);
+    });
+}
+
+async function doRename(input, titleSpan, btn, cleanup) {
+    const newTitle = input.value.trim();
+    if (!newTitle || newTitle === btn.dataset.renameTitle) {
+        cleanup();
+        return;
+    }
+
+    const id = input.dataset.entryId;
     try {
-        const r = await fetch('/api/capture', {
-            method: 'POST',
-            headers: {'Content-Type':'application/json'},
-            body: JSON.stringify({url})
+        const r = await fetch(`/api/entries/${id}`, {
+            method: 'PATCH',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({title: newTitle})
         });
-        const d = await r.json();
         if (r.ok) {
-            if (d.status === 'exists') {
-                msg.className = 'msg ok';
-                msg.textContent = `ℹ️ 已存在: ${d.title || url}`;
-            } else {
-                msg.className = 'msg ok';
-                msg.textContent = `✅ 已收录: ${d.title || url}`;
-            }
-            document.getElementById('capture-url').value = '';
-            loadStats();
-            loadEntries();
+            // Update UI in place
+            titleSpan.textContent = newTitle;
+            btn.dataset.renameTitle = newTitle;
+            cleanup();
         } else {
-            msg.className = 'msg err';
-            msg.textContent = `❌ ${d.detail || 'Error'}`;
+            alert('重命名失败');
         }
     } catch(e) {
-        msg.className = 'msg err';
-        msg.textContent = `❌ ${e.message}`;
-    } finally {
-        btn.disabled = false;
-        btn.textContent = '📥 收录';
+        alert('重命名失败: ' + e.message);
     }
 }
 
 loadStats();
-loadEntries();
+loadEntries(1);
 
 // Event delegation for entry list
 document.getElementById('results').addEventListener('click', function(e) {
+    // Rename button
+    const renameBtn = e.target.closest('.btn-rename');
+    if (renameBtn) {
+        e.preventDefault();
+        e.stopPropagation();
+        startRename(renameBtn);
+        return;
+    }
+
+    // Delete button
     const btn = e.target.closest('.btn-delete');
     if (btn) {
         e.preventDefault();
@@ -553,6 +790,13 @@ document.getElementById('results').addEventListener('click', function(e) {
         deleteEntry(Number(id), title);
         return;
     }
+
+    // Don't navigate if clicking inside rename input
+    if (e.target.closest('.rename-input') || e.target.closest('.rename-actions')) {
+        return;
+    }
+
+    // Entry click -> detail
     const entry = e.target.closest('.entry');
     if (entry && entry.dataset.id) {
         location.href = '/detail/' + entry.dataset.id;

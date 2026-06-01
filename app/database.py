@@ -196,6 +196,22 @@ def search_entries(query: str, limit: int = 10, offset: int = 0) -> list:
     return results
 
 
+def get_entries_count(content_type: Optional[str] = None) -> int:
+    """Get total count of entries for pagination."""
+    conn = get_db()
+    if content_type:
+        count = conn.execute(
+            "SELECT COUNT(*) FROM entries WHERE status='done' AND content_type=?",
+            (content_type,),
+        ).fetchone()[0]
+    else:
+        count = conn.execute(
+            "SELECT COUNT(*) FROM entries WHERE status='done'"
+        ).fetchone()[0]
+    conn.close()
+    return count
+
+
 def list_entries(
     content_type: Optional[str] = None,
     limit: int = 20,
