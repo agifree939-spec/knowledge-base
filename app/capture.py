@@ -234,8 +234,19 @@ async def capture_tweet(url: str) -> dict:
     
     # Extract images
     all_images = []
-    media = tweet.get("media", [])
-    for item in media:
+    media = tweet.get("media", {})
+    
+    # media can be a dict with "all", "photos", "videos" keys
+    if isinstance(media, dict):
+        media_items = media.get("all", [])
+    elif isinstance(media, list):
+        media_items = media
+    else:
+        media_items = []
+    
+    for item in media_items:
+        if not isinstance(item, dict):
+            continue
         if item.get("type") == "photo":
             all_images.append(item.get("url", ""))
         elif item.get("type") == "video":
