@@ -261,6 +261,14 @@ async def capture_tweet(url: str) -> dict:
         blocks = content.get("blocks", [])
         entity_map = content.get("entityMap", [])
         
+        # Build media_id → original_img_url lookup from article.media_entities
+        media_url_map = {}
+        for me in article.get("media_entities", []):
+            mid = me.get("media_id", "")
+            img_url = me.get("media_info", {}).get("original_img_url", "")
+            if mid and img_url:
+                media_url_map[mid] = img_url
+        
         # Extract text from blocks with proper formatting
         full_text_parts = []
         for block in blocks:
@@ -283,12 +291,12 @@ async def capture_tweet(url: str) -> dict:
                                 all_images.append(img_url)
                                 full_text_parts.append(f"![图片]({img_url})")
                         elif etype == "MEDIA":
-                            # MEDIA type — extract mediaId for URL construction
+                            # Look up actual URL from media_entities
                             media_items_list = edata.get("mediaItems", [])
                             for item in media_items_list:
                                 media_id = item.get("mediaId", "")
-                                if media_id:
-                                    img_url = f"https://pbs.twimg.com/media/{media_id}?format=jpg&name=large"
+                                img_url = media_url_map.get(media_id, "")
+                                if img_url:
                                     all_images.append(img_url)
                                     full_text_parts.append(f"![图片]({img_url})")
                         elif etype == "MARKDOWN":
@@ -322,7 +330,8 @@ async def capture_tweet(url: str) -> dict:
         # Also check for cover media
         cover_media = article.get("cover_media", {})
         if cover_media:
-            cover_url = cover_media.get("media_url_https") or cover_media.get("url", "")
+            cover_url = cover_media.get("media_info", {}).get("original_img_url", "") or \
+                        cover_media.get("media_url_https") or cover_media.get("url", "")
             if cover_url and cover_url not in all_images:
                 all_images.insert(0, cover_url)
     else:
