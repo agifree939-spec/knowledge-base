@@ -688,6 +688,47 @@ async function deleteEntry(id, title) {
     }
 }
 
+async function doCapture() {
+    const url = document.getElementById('capture-url').value.trim();
+    const msg = document.getElementById('capture-msg');
+    const btn = document.getElementById('capture-btn');
+    if (!url) return;
+
+    btn.disabled = true;
+    btn.textContent = '⏳ 收录中...';
+    msg.className = 'msg'; msg.textContent = ''; msg.style.display = 'none';
+
+    try {
+        const r = await fetch('/api/capture', {
+            method: 'POST',
+            headers: {'Content-Type':'application/json'},
+            body: JSON.stringify({url})
+        });
+        const d = await r.json();
+        if (r.ok) {
+            if (d.status === 'exists') {
+                msg.className = 'msg ok';
+                msg.textContent = `ℹ️ 已存在: ${d.title || url}`;
+            } else {
+                msg.className = 'msg ok';
+                msg.textContent = `✅ 已收录: ${d.title || url}`;
+            }
+            document.getElementById('capture-url').value = '';
+            loadStats();
+            loadEntries();
+        } else {
+            msg.className = 'msg err';
+            msg.textContent = `❌ ${d.detail || 'Error'}`;
+        }
+    } catch(e) {
+        msg.className = 'msg err';
+        msg.textContent = `❌ ${e.message}`;
+    } finally {
+        btn.disabled = false;
+        btn.textContent = '📥 收录';
+    }
+}
+
 // AI-powered rename
 function startRename(btn) {
     const entryEl = btn.closest('.entry');
