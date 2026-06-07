@@ -217,7 +217,7 @@ async def capture_tweet(url: str) -> dict:
     
     async with httpx.AsyncClient(follow_redirects=True, timeout=30) as client:
         try:
-            response = await client.get(api_url)
+            response = await client.get(api_url, headers={"User-Agent": "Mozilla/5.0 (compatible; KnowledgeBase/1.0)"})
             response.raise_for_status()
             data = response.json()
         except Exception as e:
@@ -283,11 +283,14 @@ async def capture_tweet(url: str) -> dict:
                                 all_images.append(img_url)
                                 full_text_parts.append(f"![图片]({img_url})")
                         elif etype == "MEDIA":
-                            # MEDIA type — could be image or video
-                            img_url = edata.get("media_url_https") or edata.get("url", "")
-                            if img_url:
-                                all_images.append(img_url)
-                                full_text_parts.append(f"![图片]({img_url})")
+                            # MEDIA type — extract mediaId for URL construction
+                            media_items_list = edata.get("mediaItems", [])
+                            for item in media_items_list:
+                                media_id = item.get("mediaId", "")
+                                if media_id:
+                                    img_url = f"https://pbs.twimg.com/media/{media_id}?format=jpg&name=large"
+                                    all_images.append(img_url)
+                                    full_text_parts.append(f"![图片]({img_url})")
                         elif etype == "MARKDOWN":
                             md = edata.get("markdown", "")
                             if md:
