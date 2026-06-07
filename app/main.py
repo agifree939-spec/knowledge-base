@@ -77,6 +77,9 @@ def markdown_to_html(text: str) -> str:
         img_match = re.match(r'^!\[([^\]]*)\]\(([^)]+)\)$', stripped)
         if img_match:
             alt, src = img_match.groups()
+            # Ensure absolute path for images
+            if not src.startswith(('http://', 'https://', '/')):
+                src = '/' + src
             html_parts.append(f'<img src="{src}" alt="{alt}">')
             continue
         
