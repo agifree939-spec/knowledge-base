@@ -167,6 +167,21 @@
             transition: all 0.2s;
         }
         .btn-back:hover { background: #e5e7eb; }
+        .btn-original {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            padding: 8px 16px;
+            background: #f0f7ff;
+            border: 1px solid #bfdbfe;
+            border-radius: 8px;
+            color: #1d4ed8;
+            font-size: 14px;
+            text-decoration: none;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .btn-original:hover { background: #dbeafe; }
         .btn-delete-detail {
             display: inline-flex;
             align-items: center;
@@ -344,10 +359,9 @@
 
     {# 不再显示尾部图片，因为已经在 full_text 中通过 markdown 渲染了 #}
 
-    <a href="{{ entry.url }}" class="original-link" target="_blank">查看原文</a>
-
     <div class="detail-actions">
         <a href="/" class="btn-back">← 返回首页</a>
+        <a href="{{ entry.url }}" class="btn-original" target="_blank">📄 查看原文</a>
         <button class="btn-delete-detail" onclick="showDeleteModal()">
             <span class="icon">🗑</span> 删除此条
         </button>
