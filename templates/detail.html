@@ -150,22 +150,162 @@
             border-top: 1px solid #eee;
             display: flex;
             gap: 10px;
+            align-items: center;
         }
-        .btn-delete-detail {
+        .btn-back {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
             padding: 8px 16px;
-            background: #fee2e2;
-            border: 1px solid #fca5a5;
-            border-radius: 6px;
-            color: #dc2626;
+            background: #f3f4f6;
+            border: 1px solid #e5e7eb;
+            border-radius: 8px;
+            color: #374151;
             font-size: 14px;
+            text-decoration: none;
             cursor: pointer;
             transition: all 0.2s;
         }
-        .btn-delete-detail:hover { background: #fecaca; }
+        .btn-back:hover { background: #e5e7eb; }
+        .btn-delete-detail {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 8px 18px;
+            background: #fff;
+            border: 1px solid #e5e7eb;
+            border-radius: 8px;
+            color: #6b7280;
+            font-size: 14px;
+            cursor: pointer;
+            transition: all 0.25s ease;
+            margin-left: auto;
+        }
+        .btn-delete-detail:hover {
+            background: #fef2f2;
+            border-color: #fca5a5;
+            color: #dc2626;
+        }
+        .btn-delete-detail:active {
+            transform: scale(0.97);
+        }
+        .btn-delete-detail .icon {
+            font-size: 15px;
+            transition: transform 0.2s;
+        }
+        .btn-delete-detail:hover .icon {
+            transform: scale(1.15);
+        }
+        .btn-delete-detail.loading {
+            pointer-events: none;
+            opacity: 0.7;
+        }
+        .btn-delete-detail.loading .icon {
+            animation: spin 0.8s linear infinite;
+        }
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        /* Delete confirmation modal */
+        .modal-overlay {
+            display: none;
+            position: fixed;
+            inset: 0;
+            background: rgba(0,0,0,0.35);
+            z-index: 1000;
+            justify-content: center;
+            align-items: center;
+            animation: fadeIn 0.15s ease;
+        }
+        .modal-overlay.active { display: flex; }
+        .modal-box {
+            background: #fff;
+            border-radius: 14px;
+            padding: 28px 24px 20px;
+            max-width: 380px;
+            width: 90%;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.15);
+            animation: slideUp 0.2s ease;
+        }
+        .modal-icon {
+            width: 48px;
+            height: 48px;
+            border-radius: 50%;
+            background: #fef2f2;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 22px;
+            margin: 0 auto 16px;
+        }
+        .modal-title {
+            font-size: 17px;
+            font-weight: 600;
+            color: #111;
+            text-align: center;
+            margin-bottom: 8px;
+        }
+        .modal-desc {
+            font-size: 14px;
+            color: #6b7280;
+            text-align: center;
+            line-height: 1.5;
+            margin-bottom: 24px;
+        }
+        .modal-desc .entry-name {
+            display: block;
+            margin-top: 6px;
+            padding: 6px 10px;
+            background: #f9fafb;
+            border-radius: 6px;
+            color: #374151;
+            font-size: 13px;
+            word-break: break-all;
+            max-height: 60px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .modal-actions {
+            display: flex;
+            gap: 10px;
+        }
+        .modal-actions button {
+            flex: 1;
+            padding: 10px 0;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s;
+            border: 1px solid;
+        }
+        .modal-cancel {
+            background: #fff;
+            border-color: #e5e7eb;
+            color: #374151;
+        }
+        .modal-cancel:hover { background: #f3f4f6; }
+        .modal-confirm {
+            background: #dc2626;
+            border-color: #dc2626;
+            color: #fff;
+        }
+        .modal-confirm:hover { background: #b91c1c; }
+        .modal-confirm:active { transform: scale(0.98); }
+
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+        @keyframes slideUp {
+            from { opacity: 0; transform: translateY(12px) scale(0.97); }
+            to { opacity: 1; transform: translateY(0) scale(1); }
+        }
     </style>
 </head>
 <body>
-    <a href="/" class="back-home">← 返回首页</a>
+    <a href="/" class="btn-back" style="margin-bottom:20px">← 返回首页</a>
 
     <div class="meta">
         <span class="type">{{ entry.content_type }}</span>
@@ -207,22 +347,79 @@
     <a href="{{ entry.url }}" class="original-link" target="_blank">查看原文</a>
 
     <div class="detail-actions">
-        <a href="/" class="original-link">← 返回首页</a>
-        <button class="btn-delete-detail" onclick="deleteEntry({{ entry.id }}, {{ entry.title|tojson }})">🗑 删除此条</button>
+        <a href="/" class="btn-back">← 返回首页</a>
+        <button class="btn-delete-detail" onclick="showDeleteModal()">
+            <span class="icon">🗑</span> 删除此条
+        </button>
+    </div>
+
+    <!-- Delete confirmation modal -->
+    <div class="modal-overlay" id="deleteModal">
+        <div class="modal-box">
+            <div class="modal-icon">🗑️</div>
+            <div class="modal-title">确认删除</div>
+            <div class="modal-desc">
+                此操作不可撤销，删除后将无法恢复。
+                <span class="entry-name">{{ entry.title }}</span>
+            </div>
+            <div class="modal-actions">
+                <button class="modal-cancel" onclick="hideDeleteModal()">取消</button>
+                <button class="modal-confirm" id="confirmDeleteBtn" onclick="confirmDelete()">确认删除</button>
+            </div>
+        </div>
     </div>
 
     <script>
-    async function deleteEntry(id, title) {
-        if (!confirm(`确定删除「${title}」？`)) return;
+    const ENTRY_ID = {{ entry.id }};
+
+    function showDeleteModal() {
+        document.getElementById('deleteModal').classList.add('active');
+    }
+
+    function hideDeleteModal() {
+        document.getElementById('deleteModal').classList.remove('active');
+    }
+
+    // Close modal on overlay click
+    document.getElementById('deleteModal').addEventListener('click', function(e) {
+        if (e.target === this) hideDeleteModal();
+    });
+
+    // Close modal on Escape
+    document.addEventListener('keydown', function(e) {
+        if (e.key === 'Escape') hideDeleteModal();
+    });
+
+    async function confirmDelete() {
+        const btn = document.getElementById('confirmDeleteBtn');
+        const origText = btn.textContent;
+        btn.textContent = '删除中...';
+        btn.style.opacity = '0.7';
+        btn.style.pointerEvents = 'none';
+
         try {
-            const r = await fetch(`/api/entries/${id}`, { method: 'DELETE' });
+            const r = await fetch(`/api/entries/${ENTRY_ID}`, { method: 'DELETE' });
             if (r.ok) {
-                window.location.href = '/';
+                // Fade out page
+                document.body.style.transition = 'opacity 0.3s';
+                document.body.style.opacity = '0';
+                setTimeout(() => { window.location.href = '/'; }, 300);
             } else {
-                alert('删除失败');
+                btn.textContent = '删除失败';
+                btn.style.background = '#dc2626';
+                setTimeout(() => {
+                    btn.textContent = origText;
+                    btn.style.opacity = '1';
+                    btn.style.pointerEvents = 'auto';
+                }, 2000);
             }
         } catch(e) {
-            alert('删除失败: ' + e.message);
+            btn.textContent = '网络错误';
+            setTimeout(() => {
+                btn.textContent = origText;
+                btn.style.opacity = '1';
+                btn.style.pointerEvents = 'auto';
+            }, 2000);
         }
     }
     </script>
