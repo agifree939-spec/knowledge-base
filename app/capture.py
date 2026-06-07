@@ -359,6 +359,20 @@ async def capture_tweet(url: str) -> dict:
                 all_images.insert(0, cover_url)
     else:
         full_text = text
+        # Convert @mentions to clickable links
+        # Check entities first (FxTwitter may provide them)
+        entities = tweet.get("entities", {})
+        mentions_from_entities = {}
+        for m in (entities.get("mentions") or entities.get("user_mentions") or []):
+            handle = m.get("screen_name") or m.get("name", "")
+            if handle:
+                mentions_from_entities[handle.lower()] = handle
+        # Regex-based fallback: convert @username to [@username](https://x.com/username)
+        # Matches @handle preceded by start-of-text, whitespace, punctuation, or list numbering
+        def _mention_to_link(m):
+            handle = m.group(1)
+            return f"[@{handle}](https://x.com/{handle})"
+        full_text = re.sub(r'(?<![A-Za-z0-9_])@([A-Za-z0-9_]{1,15})', _mention_to_link, full_text)
     
     # Verify capture completeness
     blocks = article.get("content", {}).get("blocks", []) if article else []
