@@ -261,23 +261,55 @@ async def capture_tweet(url: str) -> dict:
         blocks = content.get("blocks", [])
         entity_map = content.get("entityMap", [])
         
-        # Extract text from blocks
+        # Extract text from blocks with proper formatting
         full_text_parts = []
         for block in blocks:
             btype = block.get("type", "")
             block_text = block.get("text", "")
             
             if btype == "atomic":
-                # Check for media in entityMap
+                # Check for media/code in entityMap
                 for entity_range in block.get("entityRanges", []):
-                    key = str(entity_range.get("key", ""))
-                    entity = entity_map[int(key)] if int(key) < len(entity_map) else {}
-                    if entity.get("type") == "IMAGE":
-                        img_data = entity.get("data", {})
-                        img_url = img_data.get("media_url_https") or img_data.get("url", "")
-                        if img_url:
-                            all_images.append(img_url)
-                            full_text_parts.append(f"![图片]({img_url})")
+                    eidx = entity_range.get("key", -1)
+                    if isinstance(eidx, int) and 0 <= eidx < len(entity_map):
+                        entity = entity_map[eidx]
+                        # entityMap entries have {"key": "N", "value": {...}} structure
+                        entity_val = entity.get("value", entity) if isinstance(entity, dict) else {}
+                        etype = entity_val.get("type", "")
+                        edata = entity_val.get("data", {})
+                        if etype == "IMAGE":
+                            img_url = edata.get("media_url_https") or edata.get("url", "")
+                            if img_url:
+                                all_images.append(img_url)
+                                full_text_parts.append(f"![图片]({img_url})")
+                        elif etype == "MEDIA":
+                            # MEDIA type — could be image or video
+                            img_url = edata.get("media_url_https") or edata.get("url", "")
+                            if img_url:
+                                all_images.append(img_url)
+                                full_text_parts.append(f"![图片]({img_url})")
+                        elif etype == "MARKDOWN":
+                            md = edata.get("markdown", "")
+                            if md:
+                                full_text_parts.append(md)
+            elif btype == "header-two":
+                if block_text:
+                    full_text_parts.append(f"## {block_text}")
+            elif btype == "header-three":
+                if block_text:
+                    full_text_parts.append(f"### {block_text}")
+            elif btype == "unordered-list-item":
+                if block_text:
+                    full_text_parts.append(f"- {block_text}")
+            elif btype == "ordered-list-item":
+                if block_text:
+                    full_text_parts.append(f"1. {block_text}")
+            elif btype == "blockquote":
+                if block_text:
+                    full_text_parts.append(f"> {block_text}")
+            elif btype == "code":
+                if block_text:
+                    full_text_parts.append(f"```\n{block_text}\n```")
             else:
                 if block_text:
                     full_text_parts.append(block_text)
