@@ -303,6 +303,10 @@ async def capture_tweet(url: str) -> dict:
                             md = edata.get("markdown", "")
                             if md:
                                 full_text_parts.append(md)
+                        elif etype == "LINK":
+                            url = edata.get("url", "")
+                            if url:
+                                full_text_parts.append(url)
             elif btype == "header-two":
                 if block_text:
                     full_text_parts.append(f"## {block_text}")
