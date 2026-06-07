@@ -316,7 +316,26 @@ async def capture_tweet(url: str) -> dict:
                 if block_text:
                     full_text_parts.append(f"1. {block_text}")
             elif btype == "blockquote":
-                if block_text:
+                # Check for embedded entities (e.g. MARKDOWN code blocks in blockquotes)
+                has_entity_content = False
+                for entity_range in block.get("entityRanges", []):
+                    eidx = entity_range.get("key", -1)
+                    if isinstance(eidx, int) and 0 <= eidx < len(entity_map):
+                        entity = entity_map[eidx]
+                        entity_val = entity.get("value", entity) if isinstance(entity, dict) else {}
+                        etype = entity_val.get("type", "")
+                        edata = entity_val.get("data", {})
+                        if etype == "MARKDOWN":
+                            md = edata.get("markdown", "")
+                            if md:
+                                full_text_parts.append(md)
+                                has_entity_content = True
+                        elif etype == "LINK":
+                            url = edata.get("url", "")
+                            if url:
+                                full_text_parts.append(f"[{block_text.strip()}]({url})")
+                                has_entity_content = True
+                if not has_entity_content and block_text:
                     full_text_parts.append(f"> {block_text}")
             elif btype == "code":
                 if block_text:
