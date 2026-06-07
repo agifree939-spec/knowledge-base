@@ -101,11 +101,23 @@ def markdown_to_html(text: str) -> str:
         
         # Regular paragraph — escape HTML then linkify URLs
         escaped = stripped.replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
+        
+        # First, handle markdown links: [text](url)
+        # Convert [@username](https://x.com/username) to <a href="url">@username</a>
         linked = re.sub(
-            r'(https?://[^\s<>&"\u3000-\u303F\uFF00-\uFFEF]+)',
-            r'<a href="\1" target="_blank" rel="noopener">\1</a>',
+            r'\[([^\]]+)\]\((https?://[^)]+)\)',
+            r'<a href="\2" target="_blank" rel="noopener">\1</a>',
             escaped
         )
+        
+        # Then, linkify remaining bare URLs (but not inside already-created links)
+        # Use a negative lookbehind to avoid matching URLs that are already in href=""
+        linked = re.sub(
+            r'(?<!href=")(?<!">)(https?://[^<\s&"]+)',
+            r'<a href="\1" target="_blank" rel="noopener">\1</a>',
+            linked
+        )
+        
         html_parts.append(f'<p>{linked}</p>')
     
     # Close any unclosed code block
