@@ -269,6 +269,13 @@ async def capture_tweet(url: str) -> dict:
             if mid and img_url:
                 media_url_map[mid] = img_url
         
+        # Build entityByKey lookup table (key -> entity value)
+        # entityMap key order may not match array index order
+        entityByKey = {}
+        for e in entity_map:
+            ekey = e.get("key", "")
+            entityByKey[str(ekey)] = e.get("value", e)
+        
         # Extract text from blocks with proper formatting
         full_text_parts = []
         for block in blocks:
@@ -278,35 +285,34 @@ async def capture_tweet(url: str) -> dict:
             if btype == "atomic":
                 # Check for media/code in entityMap
                 for entity_range in block.get("entityRanges", []):
-                    eidx = entity_range.get("key", -1)
-                    if isinstance(eidx, int) and 0 <= eidx < len(entity_map):
-                        entity = entity_map[eidx]
-                        # entityMap entries have {"key": "N", "value": {...}} structure
-                        entity_val = entity.get("value", entity) if isinstance(entity, dict) else {}
-                        etype = entity_val.get("type", "")
-                        edata = entity_val.get("data", {})
-                        if etype == "IMAGE":
-                            img_url = edata.get("media_url_https") or edata.get("url", "")
+                    ekey = str(entity_range.get("key", -1))
+                    entity = entityByKey.get(ekey, {})
+                    # entityMap entries have {"key": "N", "value": {...}} structure
+                    entity_val = entity.get("value", entity) if isinstance(entity, dict) else {}
+                    etype = entity_val.get("type", "")
+                    edata = entity_val.get("data", {})
+                    if etype == "IMAGE":
+                        img_url = edata.get("media_url_https") or edata.get("url", "")
+                        if img_url:
+                            all_images.append(img_url)
+                            full_text_parts.append(f"![图片]({img_url})")
+                    elif etype == "MEDIA":
+                        # Look up actual URL from media_entities
+                        media_items_list = edata.get("mediaItems", [])
+                        for item in media_items_list:
+                            media_id = item.get("mediaId", "")
+                            img_url = media_url_map.get(media_id, "")
                             if img_url:
                                 all_images.append(img_url)
                                 full_text_parts.append(f"![图片]({img_url})")
-                        elif etype == "MEDIA":
-                            # Look up actual URL from media_entities
-                            media_items_list = edata.get("mediaItems", [])
-                            for item in media_items_list:
-                                media_id = item.get("mediaId", "")
-                                img_url = media_url_map.get(media_id, "")
-                                if img_url:
-                                    all_images.append(img_url)
-                                    full_text_parts.append(f"![图片]({img_url})")
-                        elif etype == "MARKDOWN":
-                            md = edata.get("markdown", "")
-                            if md:
-                                full_text_parts.append(md)
-                        elif etype == "LINK":
-                            url = edata.get("url", "")
-                            if url:
-                                full_text_parts.append(url)
+                    elif etype == "MARKDOWN":
+                        md = edata.get("markdown", "")
+                        if md:
+                            full_text_parts.append(md)
+                    elif etype == "LINK":
+                        url = edata.get("url", "")
+                        if url:
+                            full_text_parts.append(url)
             elif btype == "header-two":
                 if block_text:
                     full_text_parts.append(f"## {block_text}")
