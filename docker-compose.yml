@@ -15,6 +15,11 @@ services:
       - OPENROUTER_API_KEY=tp-s0c7vidm4i1mz9ce1ximry6lfke8a4rl0yqxnwxjv5ntdcst
       - OPENROUTER_BASE_URL=https://token-plan-sgp.xiaomimimo.com/v1
       - AI_MODEL=mimo-v2.5-pro
+    # Auth Gateway 配置 — API Key 在此查看和修改
+    labels:
+      - ccwu.auth.api-key=nJQD3B_M8J_valrADSY1D_eA3sW04KJVuCiHslt4fQ4
+      - ccwu.auth.domain=kb.zencore.ccwu.cc
+      - ccwu.auth.protected-paths=/api/
 
 volumes:
   kb-data:
