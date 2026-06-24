@@ -487,6 +487,89 @@
 </div>
 
 <script>
+
+// API Key 管理
+const API_KEY = (() => {
+    // 1. 从 URL 参数读取
+    const urlParams = new URLSearchParams(window.location.search);
+    const key = urlParams.get('api_key');
+    if (key) {
+        localStorage.setItem('kb_api_key', key);
+        // 清除 URL 中的 api_key（避免泄露）
+        urlParams.delete('api_key');
+        const newUrl = window.location.pathname + (urlParams.toString() ? '?' + urlParams : '');
+        window.history.replaceState({}, '', newUrl);
+        return key;
+    }
+    // 2. 从 localStorage 读取
+    return localStorage.getItem('kb_api_key') || '';
+})();
+
+// API Key 输入界面（没有 key 时显示）
+function showApiKeyPrompt() {
+    document.body.innerHTML = `
+    <div style="display:flex;align-items:center;justify-content:center;min-height:100vh;background:#0a0a0a;">
+        <div style="background:#141414;border:1px solid #222;border-radius:16px;padding:2.5rem;max-width:400px;width:90%;text-align:center;">
+            <div style="font-size:3rem;margin-bottom:1rem;">🔐</div>
+            <h2 style="color:#fff;font-size:1.3rem;margin-bottom:0.5rem;">访问知识库</h2>
+            <p style="color:#666;font-size:0.85rem;margin-bottom:1.5rem;">请输入 API Key 以继续访问</p>
+            <input id="api-key-input" type="password" placeholder="输入 API Key..."
+                style="width:100%;padding:0.8rem 1rem;background:#0a0a0a;border:1px solid #222;border-radius:8px;color:#fff;font-size:0.95rem;outline:none;margin-bottom:1rem;"
+                onkeydown="if(event.key==='Enter')saveApiKey()" />
+            <button onclick="saveApiKey()"
+                style="width:100%;padding:0.8rem;background:#4a9eff;color:#fff;border:none;border-radius:8px;font-size:0.95rem;font-weight:600;cursor:pointer;">
+                确认访问
+            </button>
+            <div id="api-key-error" style="color:#e74c3c;font-size:0.8rem;margin-top:0.75rem;display:none;"></div>
+        </div>
+    </div>`;
+    document.getElementById('api-key-input').focus();
+}
+
+function saveApiKey() {
+    const input = document.getElementById('api-key-input');
+    const key = input.value.trim();
+    if (!key) {
+        const err = document.getElementById('api-key-error');
+        err.textContent = '请输入 API Key';
+        err.style.display = 'block';
+        return;
+    }
+    localStorage.setItem('kb_api_key', key);
+    // 验证 key 是否有效
+    fetch('/api/stats?api_key=' + encodeURIComponent(key))
+        .then(r => {
+            if (r.ok) return r.json();
+            throw new Error('Invalid key');
+        })
+        .then(data => {
+            localStorage.setItem('kb_api_key', key);
+            location.reload();
+        })
+        .catch(() => {
+            const err = document.getElementById('api-key-error');
+            err.textContent = 'API Key 无效，请重新输入';
+            err.style.display = 'block';
+            localStorage.removeItem('kb_api_key');
+        });
+}
+
+// 没有 key 时显示输入界面
+if (!API_KEY) {
+    showApiKeyPrompt();
+    throw new Error('API Key required'); // 阻止后续代码执行
+}
+
+// 包装 fetch，自动携带 api_key
+const originalFetch = window.fetch;
+window.fetch = function(url, options) {
+    if (typeof url === 'string' && url.startsWith('/api/') && API_KEY) {
+        const separator = url.includes('?') ? '&' : '?';
+        url = url + separator + 'api_key=' + encodeURIComponent(API_KEY);
+    }
+    return originalFetch.call(this, url, options);
+};
+
 const ICONS = { tweet: '🐦', article: '📄' };
 const PAGE_SIZE = 20;
 
