@@ -12,4 +12,13 @@ services:
       - KB_DB_PATH=/data/knowledge.db
       - KB_HOST=0.0.0.0
       - KB_PORT=8501
-      - OPENROUTER_API_KEY=***    ...[truncated]
+      - OPENROUTER_API_KEY=tp-s0c2p0mvprccfw8b1vysj1a9rhgezuqjtb4e98n9q3gtlst
+      - OPENROUTER_BASE_URL=https://token-plan-sgp.xiaomimimo.com/v1
+      - AI_MODEL=mimo-v2.5-pro
+      - AUTH_API_KEY=nJQD3B_M8J_valrADSY1D_eA3sW04KJVuCiHslt4fQ4
+      - AUTH_DOMAIN=kb.zencore.ccwu.cc
+      - AUTH_PROTECTED_PATHS=/api/
+
+volumes:
+  kb-data:
+    driver: local
