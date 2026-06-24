@@ -6,4 +6,10 @@ services:
     restart: unless-stopped
     working_dir: /app
     volumes:
-      - kb-...[truncated]
+      - kb-data:/data
+    environment:
+      - KB_DATA_DIR=/data
+      - KB_DB_PATH=/data/knowledge.db
+      - KB_HOST=0.0.0.0
+      - KB_PORT=8501
+      - OPENROUTER_API_KEY=***    ...[truncated]
