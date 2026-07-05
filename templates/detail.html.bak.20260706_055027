@@ -64,7 +64,6 @@
             font-size: 12px;
         }
         .content {
-            overflow: hidden;
             font-size: 16px;
             line-height: 1.9;
             color: #222;
@@ -80,9 +79,6 @@
         .content pre {
             padding: 12px;
             overflow-x: auto;
-            max-width: 100%;
-            white-space: pre-wrap;
-            word-break: break-all;
             margin-bottom: 16px;
         }
         .content code {

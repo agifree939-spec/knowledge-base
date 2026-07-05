@@ -1,0 +1,816 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>个人知识库 — 收录推文与文章</title>
+    <style>
+        :root {
+            --bg: #0a0a0a;
+            --card: #141414;
+            --card-hover: #1a1a1a;
+            --border: #222;
+            --text: #e0e0e0;
+            --text-dim: #666;
+            --accent: #4a9eff;
+            --accent-hover: #3a8eef;
+            --green: #00b894;
+            --green-dim: #00b89420;
+            --red: #e74c3c;
+            --red-dim: #e74c3c20;
+            --twitter: #1da1f2;
+            --article: #8b5cf6;
+        }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            min-height: 100vh;
+        }
+        .container { max-width: 860px; margin: 0 auto; padding: 2rem 1.5rem; }
+
+        /* Header */
+        .header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 2rem;
+            padding-bottom: 1.5rem;
+            border-bottom: 1px solid var(--border);
+        }
+        .header h1 {
+            font-size: 1.5rem;
+            color: #fff;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+        .header h1 span { font-size: 1.3rem; }
+
+        /* Stats bar */
+        .stats {
+            display: flex;
+            gap: 2rem;
+        }
+        .stat {
+            text-align: center;
+        }
+        .stat .num {
+            font-size: 1.25rem;
+            font-weight: 700;
+            color: var(--accent);
+        }
+        .stat .label {
+            font-size: 0.7rem;
+            color: var(--text-dim);
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        /* Capture area */
+        .capture {
+            background: var(--card);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 1.25rem;
+            margin-bottom: 1.5rem;
+            transition: border-color 0.2s;
+        }
+        .capture:focus-within {
+            border-color: var(--accent);
+        }
+        .capture-row {
+            display: flex;
+            gap: 0.5rem;
+        }
+        .capture input {
+            flex: 1;
+            padding: 0.7rem 1rem;
+            background: var(--bg);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            color: #fff;
+            font-size: 0.95rem;
+            outline: none;
+            transition: border-color 0.2s;
+        }
+        .capture input:focus { border-color: var(--accent); }
+        .capture input::placeholder { color: #444; }
+        .capture button {
+            padding: 0.7rem 1.5rem;
+            background: var(--green);
+            color: #fff;
+            border: none;
+            border-radius: 8px;
+            font-size: 0.9rem;
+            font-weight: 600;
+            cursor: pointer;
+            white-space: nowrap;
+            transition: background 0.2s, transform 0.1s;
+        }
+        .capture button:hover { background: #00a381; }
+        .capture button:active { transform: scale(0.97); }
+        .capture button:disabled {
+            background: #333;
+            color: #666;
+            cursor: not-allowed;
+        }
+        .msg {
+            margin-top: 0.75rem;
+            padding: 0.6rem 0.8rem;
+            border-radius: 8px;
+            font-size: 0.85rem;
+            display: none;
+            animation: fadeIn 0.2s ease;
+        }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: translateY(0); } }
+        .msg.ok { display: block; background: var(--green-dim); color: var(--green); }
+        .msg.err { display: block; background: var(--red-dim); color: var(--red); }
+
+        /* Search */
+        .search-bar {
+            display: flex;
+            gap: 0.5rem;
+            margin-bottom: 1.5rem;
+        }
+        .search-bar input {
+            flex: 1;
+            padding: 0.65rem 1rem;
+            background: var(--card);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            color: #fff;
+            font-size: 0.9rem;
+            outline: none;
+            transition: border-color 0.2s;
+        }
+        .search-bar input:focus { border-color: var(--accent); }
+        .search-bar input::placeholder { color: #444; }
+        .search-bar button {
+            padding: 0.65rem 1rem;
+            background: transparent;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            color: var(--text-dim);
+            font-size: 0.9rem;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .search-bar button:hover {
+            border-color: var(--accent);
+            color: var(--accent);
+        }
+
+        /* Section header */
+        .section-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 1rem;
+        }
+        .section-title {
+            font-size: 0.8rem;
+            color: var(--text-dim);
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            font-weight: 600;
+        }
+        .clear-search {
+            font-size: 0.8rem;
+            color: var(--accent);
+            cursor: pointer;
+            background: none;
+            border: none;
+            display: none;
+        }
+        .clear-search:hover { text-decoration: underline; }
+
+        /* Entry cards */
+        .entries { display: flex; flex-direction: column; gap: 0.5rem; }
+        .entry {
+            background: var(--card);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            padding: 1rem 1.25rem;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: flex;
+            gap: 1rem;
+            align-items: flex-start;
+        }
+        .entry:hover {
+            background: var(--card-hover);
+            border-color: #333;
+            transform: translateY(-1px);
+        }
+        .entry-icon {
+            width: 36px;
+            height: 36px;
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1rem;
+            flex-shrink: 0;
+            margin-top: 2px;
+        }
+        .entry-icon.tweet { background: #1da1f220; color: var(--twitter); }
+        .entry-icon.article { background: #8b5cf620; color: var(--article); }
+        .entry-thumb {
+            width: 72px;
+            height: 72px;
+            object-fit: cover;
+            border-radius: 8px;
+            flex-shrink: 0;
+            margin-top: 2px;
+        }
+        .entry-body { flex: 1; min-width: 0; }
+        .entry-title-row {
+            display: flex;
+            align-items: center;
+            gap: 0.4rem;
+            margin-bottom: 0.35rem;
+        }
+        .entry-title {
+            font-size: 0.95rem;
+            color: #fff;
+            line-height: 1.4;
+            display: -webkit-box;
+            -webkit-line-clamp: 2;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
+        }
+        .verify-ok, .verify-warn {
+            font-size: 0.75rem;
+            vertical-align: middle;
+            margin-left: 0.3rem;
+        }
+        .entry-meta {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            font-size: 0.78rem;
+            color: var(--text-dim);
+        }
+        .entry-meta .tag {
+            background: #1a1a2e;
+            color: var(--accent);
+            padding: 1px 6px;
+            border-radius: 4px;
+            font-size: 0.7rem;
+        }
+        .entry-date { margin-left: auto; }
+        .entry-actions {
+            display: flex;
+            align-items: center;
+            gap: 0.35rem;
+            flex-shrink: 0;
+            margin-left: 0.5rem;
+        }
+        .btn-icon {
+            width: 32px;
+            height: 32px;
+            border-radius: 6px;
+            border: 1px solid transparent;
+            background: transparent;
+            color: #555;
+            font-size: 0.85rem;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s;
+        }
+        .btn-icon:hover {
+            background: #2a2a2a;
+            color: var(--text);
+            border-color: #444;
+        }
+        .btn-delete:hover {
+            background: var(--red-dim);
+            color: var(--red);
+            border-color: var(--red);
+        }
+        .entry-summary {
+            font-size: 0.82rem;
+            color: #555;
+            margin-top: 0.35rem;
+            line-height: 1.5;
+            display: -webkit-box;
+            -webkit-line-clamp: 2;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
+        }
+
+        /* Inline rename */
+        .rename-input {
+            flex: 1;
+            padding: 0.2rem 0.5rem;
+            background: var(--bg);
+            border: 1px solid var(--accent);
+            border-radius: 4px;
+            color: #fff;
+            font-size: 0.95rem;
+            outline: none;
+            min-width: 0;
+        }
+        .rename-actions {
+            display: flex;
+            gap: 0.25rem;
+            flex-shrink: 0;
+        }
+        .btn-rename-save, .btn-rename-cancel {
+            width: 28px;
+            height: 28px;
+            border-radius: 4px;
+            border: 1px solid transparent;
+            background: transparent;
+            font-size: 0.85rem;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.15s;
+        }
+        .btn-rename-save {
+            color: var(--green);
+        }
+        .btn-rename-save:hover {
+            background: var(--green-dim);
+            border-color: var(--green);
+        }
+        .btn-rename-cancel {
+            color: var(--red);
+        }
+        .btn-rename-cancel:hover {
+            background: var(--red-dim);
+            border-color: var(--red);
+        }
+
+        /* Pagination */
+        .pagination {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.5rem;
+            margin-top: 1.5rem;
+            padding-top: 1.5rem;
+            border-top: 1px solid var(--border);
+        }
+        .pagination button {
+            padding: 0.5rem 1rem;
+            background: var(--card);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            color: var(--text);
+            font-size: 0.85rem;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .pagination button:hover:not(:disabled) {
+            border-color: var(--accent);
+            color: var(--accent);
+        }
+        .pagination button:disabled {
+            opacity: 0.3;
+            cursor: not-allowed;
+        }
+        .pagination .page-info {
+            font-size: 0.85rem;
+            color: var(--text-dim);
+            padding: 0 0.5rem;
+        }
+        .pagination .page-jump {
+            display: flex;
+            align-items: center;
+            gap: 0.3rem;
+        }
+        .pagination .page-jump input {
+            width: 48px;
+            padding: 0.45rem 0.5rem;
+            background: var(--card);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            color: #fff;
+            font-size: 0.85rem;
+            text-align: center;
+            outline: none;
+        }
+        .pagination .page-jump input:focus { border-color: var(--accent); }
+
+        /* Empty state */
+        .empty {
+            text-align: center;
+            padding: 4rem 1rem;
+        }
+        .empty-icon { font-size: 3rem; margin-bottom: 1rem; opacity: 0.3; }
+        .empty-text { color: #444; font-size: 0.95rem; }
+        .empty-hint { color: #333; font-size: 0.85rem; margin-top: 0.5rem; }
+
+        /* Loading skeleton */
+        .skeleton {
+            background: var(--card);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            padding: 1rem 1.25rem;
+            animation: pulse 1.5s ease-in-out infinite;
+        }
+        @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
+        .skeleton-line {
+            height: 14px;
+            background: #222;
+            border-radius: 4px;
+            margin-bottom: 8px;
+        }
+        .skeleton-line.short { width: 40%; }
+        .skeleton-line.med { width: 70%; }
+
+        /* Responsive */
+        @media (max-width: 600px) {
+            .container { padding: 1rem; }
+            .header { flex-direction: column; gap: 1rem; align-items: flex-start; }
+            .stats { gap: 1.5rem; }
+            .capture-row { flex-direction: column; }
+            .entry { padding: 0.85rem 1rem; }
+            .pagination { flex-wrap: wrap; }
+        }
+    </style>
+</head>
+<body>
+<div class="container">
+    <div class="header">
+        <h1><span>📚</span> 个人知识库 — 收录推文与文章</h1>
+        <div class="stats">
+            <div class="stat"><div class="num" id="s-total">-</div><div class="label">Total</div></div>
+            <div class="stat"><div class="num" id="s-tweets">-</div><div class="label">Tweets</div></div>
+            <div class="stat"><div class="num" id="s-articles">-</div><div class="label">Articles</div></div>
+            <div class="stat"><div class="num" id="s-images">-</div><div class="label">Images</div></div>
+        </div>
+    </div>
+
+    <div class="capture">
+        <div class="capture-row">
+            <input id="capture-url" placeholder="粘贴推文或文章链接..." onkeydown="if(event.key==='Enter') doCapture()" />
+            <button id="capture-btn" onclick="doCapture()">📥 收录</button>
+        </div>
+        <div class="msg" id="capture-msg"></div>
+    </div>
+
+    <div class="search-bar">
+        <input id="search-q" placeholder="搜索知识库..." onkeydown="if(event.key==='Enter') doSearch()" />
+        <button onclick="doSearch()">🔍</button>
+    </div>
+
+    <div class="section-header">
+        <div class="section-title" id="section-label">最近收录</div>
+        <button class="clear-search" id="clear-btn" onclick="clearSearch()">← 返回全部</button>
+    </div>
+
+    <div class="entries" id="results">
+        <div class="skeleton"><div class="skeleton-line med"></div><div class="skeleton-line short"></div></div>
+        <div class="skeleton"><div class="skeleton-line med"></div><div class="skeleton-line short"></div></div>
+        <div class="skeleton"><div class="skeleton-line med"></div><div class="skeleton-line short"></div></div>
+    </div>
+
+    <div class="pagination" id="pagination" style="display:none;">
+        <button id="btn-first" onclick="goToPage(1)">⟪</button>
+        <button id="btn-prev" onclick="goToPage(state.page - 1)">⟨ 上一页</button>
+        <span class="page-info" id="page-info"></span>
+        <button id="btn-next" onclick="goToPage(state.page + 1)">下一页 ⟩</button>
+        <button id="btn-last" onclick="goToPage(state.totalPages)">⟫</button>
+        <div class="page-jump">
+            <span style="color:#666;font-size:0.8rem;">跳转</span>
+            <input id="page-jump-input" type="number" min="1" onkeydown="if(event.key==='Enter')jumpToPage()" />
+        </div>
+    </div>
+</div>
+
+<script>
+const ICONS = { tweet: '🐦', article: '📄' };
+const PAGE_SIZE = 20;
+
+// Pagination state
+const state = {
+    page: 1,
+    totalPages: 1,
+    total: 0,
+    mode: 'list',  // 'list' | 'search'
+    searchQuery: '',
+};
+
+function escapeHtml(s) {
+    const d = document.createElement('div');
+    d.textContent = s;
+    return d.innerHTML;
+}
+
+function escapeAttr(s) {
+    return s.replace(/&/g,'&amp;').replace(/'/g,'&#39;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+function renderEntry(e) {
+    const icon = ICONS[e.content_type] || '📌';
+    const iconClass = e.content_type || 'tweet';
+    const title = escapeHtml(e.title || 'Untitled');
+    const summary = e.summary ? `<div class="entry-summary">${escapeHtml(e.summary.substring(0, 120))}</div>` : '';
+    const author = e.author || e.source_author || '';
+    const tags = (e.tags || []).slice(0, 3).map(t => `<span class="tag">#${escapeHtml(t)}</span>`).join('');
+    const date = e.captured_at ? e.captured_at.substring(0, 10) : '';
+    const thumb = e.first_image ? `<img class="entry-thumb" src="/${e.first_image}" alt="" loading="lazy">` : '';
+    
+    // Verification badge
+    let verifyBadge = '';
+    const v = e.verification;
+    if (v) {
+        if (v.ok) {
+            verifyBadge = '<span class="verify-ok" title="内容完整性验证通过">✅</span>';
+        } else {
+            const pct = v.coverage ? Math.round(v.coverage * 100) : 0;
+            verifyBadge = `<span class="verify-warn" title="内容可能不完整 (${pct}% 覆盖率)">⚠️</span>`;
+        }
+    }
+
+    return `
+        <div class="entry" data-id="${e.id}">
+            <div class="entry-icon ${iconClass}">${icon}</div>
+            ${thumb}
+            <div class="entry-body">
+                <div class="entry-title-row">
+                    <span class="entry-title">${title}</span>
+                    ${verifyBadge}
+                    <button class="btn-icon btn-rename" data-rename-id="${e.id}" data-rename-title="${escapeAttr(e.title || '')}" title="重命名">✏️</button>
+                </div>
+                <div class="entry-meta">
+                    ${author ? `<span>${escapeHtml(author)}</span>` : ''}
+                    ${tags}
+                    ${date ? `<span class="entry-date">${date}</span>` : ''}
+                </div>
+                ${summary}
+            </div>
+            <div class="entry-actions">
+                <button class="btn-icon btn-delete" data-delete-id="${e.id}" data-delete-title="${escapeAttr(e.title || 'Untitled')}" title="删除">🗑</button>
+            </div>
+        </div>`;
+}
+
+function renderEmpty(text, hint) {
+    return `<div class="empty">
+        <div class="empty-icon">📭</div>
+        <div class="empty-text">${text}</div>
+        ${hint ? `<div class="empty-hint">${hint}</div>` : ''}
+    </div>`;
+}
+
+function updatePagination() {
+    const el = document.getElementById('pagination');
+    if (state.totalPages <= 1) {
+        el.style.display = 'none';
+        return;
+    }
+    el.style.display = 'flex';
+    document.getElementById('btn-first').disabled = state.page <= 1;
+    document.getElementById('btn-prev').disabled = state.page <= 1;
+    document.getElementById('btn-next').disabled = state.page >= state.totalPages;
+    document.getElementById('btn-last').disabled = state.page >= state.totalPages;
+    document.getElementById('page-info').textContent = `第 ${state.page} / ${state.totalPages} 页 (共 ${state.total} 条)`;
+    document.getElementById('page-jump-input').max = state.totalPages;
+}
+
+function goToPage(page) {
+    if (page < 1 || page > state.totalPages) return;
+    state.page = page;
+    if (state.mode === 'search') {
+        doSearch(page);
+    } else {
+        loadEntries(page);
+    }
+}
+
+function jumpToPage() {
+    const input = document.getElementById('page-jump-input');
+    const page = parseInt(input.value);
+    if (page && page >= 1 && page <= state.totalPages) {
+        goToPage(page);
+        input.value = '';
+    }
+}
+
+async function loadStats() {
+    try {
+        const r = await fetch('/api/stats');
+        const d = await r.json();
+        document.getElementById('s-total').textContent = d.total || 0;
+        document.getElementById('s-tweets').textContent = d.tweets || 0;
+        document.getElementById('s-articles').textContent = d.articles || 0;
+        document.getElementById('s-images').textContent = d.images || 0;
+    } catch(e) {}
+}
+
+async function loadEntries(page) {
+    page = page || 1;
+    state.page = page;
+    state.mode = 'list';
+    const offset = (page - 1) * PAGE_SIZE;
+
+    try {
+        const r = await fetch(`/api/entries?limit=${PAGE_SIZE}&offset=${offset}`);
+        const d = await r.json();
+        const el = document.getElementById('results');
+
+        if (!d.results || d.results.length === 0) {
+            el.innerHTML = renderEmpty('还没有收录任何内容', '在上方粘贴链接开始收录');
+            document.getElementById('pagination').style.display = 'none';
+            return;
+        }
+
+        state.total = d.total || 0;
+        state.totalPages = Math.max(1, Math.ceil(state.total / PAGE_SIZE));
+        el.innerHTML = d.results.map(renderEntry).join('');
+        updatePagination();
+    } catch(e) {
+        document.getElementById('results').innerHTML = renderEmpty('加载失败', '请刷新页面重试');
+    }
+}
+
+async function doSearch(page) {
+    const q = document.getElementById('search-q').value.trim();
+    if (!q) { clearSearch(); return; }
+
+    page = page || 1;
+    state.page = page;
+    state.mode = 'search';
+    state.searchQuery = q;
+    const offset = (page - 1) * PAGE_SIZE;
+
+    document.getElementById('section-label').textContent = '搜索结果';
+    document.getElementById('clear-btn').style.display = 'block';
+
+    try {
+        const r = await fetch(`/api/search?q=${encodeURIComponent(q)}&limit=${PAGE_SIZE}&offset=${offset}`);
+        const d = await r.json();
+        const el = document.getElementById('results');
+        if (!d.results || d.results.length === 0) {
+            el.innerHTML = renderEmpty(`未找到"${q}"的相关内容`, '试试其他关键词');
+            document.getElementById('pagination').style.display = 'none';
+            return;
+        }
+        // Search API doesn't return total, so hide pagination for search
+        state.total = d.results.length;
+        state.totalPages = 1;
+        el.innerHTML = d.results.map(renderEntry).join('');
+        updatePagination();
+    } catch(e) {
+        document.getElementById('results').innerHTML = renderEmpty('搜索失败', '请重试');
+    }
+}
+
+function clearSearch() {
+    document.getElementById('search-q').value = '';
+    document.getElementById('section-label').textContent = '最近收录';
+    document.getElementById('clear-btn').style.display = 'none';
+    state.mode = 'list';
+    loadEntries(1);
+}
+
+async function deleteEntry(id, title) {
+    if (!confirm(`确定删除「${title}」？`)) return;
+    try {
+        const r = await fetch(`/api/entries/${id}`, { method: 'DELETE' });
+        if (r.ok) {
+            loadStats();
+            loadEntries(state.page);
+        } else {
+            alert('删除失败');
+        }
+    } catch(e) {
+        alert('删除失败: ' + e.message);
+    }
+}
+
+async function doCapture() {
+    const url = document.getElementById('capture-url').value.trim();
+    const msg = document.getElementById('capture-msg');
+    const btn = document.getElementById('capture-btn');
+    if (!url) return;
+
+    btn.disabled = true;
+    btn.textContent = '⏳ 收录中...';
+    msg.className = 'msg'; msg.textContent = ''; msg.style.display = 'none';
+
+    try {
+        const r = await fetch('/api/capture', {
+            method: 'POST',
+            headers: {'Content-Type':'application/json'},
+            body: JSON.stringify({url})
+        });
+        const d = await r.json();
+        if (r.ok) {
+            if (d.status === 'exists') {
+                msg.className = 'msg ok';
+                msg.textContent = `ℹ️ 已存在: ${d.title || url}`;
+            } else {
+                msg.className = 'msg ok';
+                msg.textContent = `✅ 已收录: ${d.title || url}`;
+            }
+            document.getElementById('capture-url').value = '';
+            loadStats();
+            loadEntries();
+        } else {
+            msg.className = 'msg err';
+            msg.textContent = `❌ ${d.detail || 'Error'}`;
+        }
+    } catch(e) {
+        msg.className = 'msg err';
+        msg.textContent = `❌ ${e.message}`;
+    } finally {
+        btn.disabled = false;
+        btn.textContent = '📥 收录';
+    }
+}
+
+// AI-powered rename
+function startRename(btn) {
+    const entryEl = btn.closest('.entry');
+    const titleRow = entryEl.querySelector('.entry-title-row');
+    const titleSpan = titleRow.querySelector('.entry-title');
+    const entryId = btn.dataset.renameId;
+    
+    // Show loading state
+    btn.disabled = true;
+    btn.textContent = '⏳';
+    btn.title = 'AI 生成标题中...';
+    
+    // Call AI rename API
+    fetch(`/api/entries/${entryId}/ai-rename`, {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'}
+    })
+    .then(r => {
+        if (!r.ok) throw new Error('AI rename failed');
+        return r.json();
+    })
+    .then(data => {
+        // Update UI with new title
+        titleSpan.textContent = data.title;
+        btn.dataset.renameTitle = data.title;
+        btn.disabled = false;
+        btn.textContent = '✏️';
+        btn.title = 'AI 重命名';
+        
+        // Show success feedback
+        const feedback = document.createElement('span');
+        feedback.className = 'rename-feedback';
+        feedback.textContent = '✓ 已更新';
+        feedback.style.cssText = 'color: #4caf50; font-size: 12px; margin-left: 8px;';
+        titleRow.appendChild(feedback);
+        setTimeout(() => feedback.remove(), 2000);
+    })
+    .catch(e => {
+        btn.disabled = false;
+        btn.textContent = '✏️';
+        btn.title = 'AI 重命名';
+        alert('AI 重命名失败: ' + e.message);
+    });
+}
+
+
+loadStats();
+loadEntries(1);
+
+// Event delegation for entry list
+document.getElementById('results').addEventListener('click', function(e) {
+    // Rename button
+    const renameBtn = e.target.closest('.btn-rename');
+    if (renameBtn) {
+        e.preventDefault();
+        e.stopPropagation();
+        startRename(renameBtn);
+        return;
+    }
+
+    // Delete button
+    const btn = e.target.closest('.btn-delete');
+    if (btn) {
+        e.preventDefault();
+        e.stopPropagation();
+        const id = btn.dataset.deleteId;
+        const title = btn.dataset.deleteTitle;
+        deleteEntry(Number(id), title);
+        return;
+    }
+
+    // Don't navigate if clicking inside rename input
+    if (e.target.closest('.rename-input') || e.target.closest('.rename-actions')) {
+        return;
+    }
+
+    // Entry click -> detail
+    const entry = e.target.closest('.entry');
+    if (entry && entry.dataset.id) {
+        location.href = '/detail/' + entry.dataset.id;
+    }
+});
+</script>
+</body>
+</html>
