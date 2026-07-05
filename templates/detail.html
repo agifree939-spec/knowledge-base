@@ -321,6 +321,27 @@
             from { opacity: 0; transform: translateY(12px) scale(0.97); }
             to { opacity: 1; transform: translateY(0) scale(1); }
         }
+        /* Responsive: mobile */
+        @media (max-width: 600px) {
+            body { padding: 12px 10px; }
+            h1 { font-size: 18px; }
+            .content { font-size: 15px; line-height: 1.7; }
+            .content pre { font-size: 12px; padding: 8px; }
+            .content p { margin-bottom: 12px; }
+            .content img { margin: 8px 0; }
+            .meta { font-size: 12px; }
+            .tags span { font-size: 11px; padding: 1px 6px; }
+            .detail-actions {
+                flex-direction: column;
+                gap: 8px;
+            }
+            .detail-actions a, .detail-actions button {
+                width: 100%;
+                justify-content: center;
+            }
+            .source-link { padding: 6px 12px; font-size: 13px; }
+            .thread-divider { margin: 16px 0; }
+        }
     </style>
 </head>
 <body>
